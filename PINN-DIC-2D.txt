@@ -1,0 +1,81 @@
+############################################
+# 📂 路径配置（需要改）
+# 其中input_dir文件中图像名称长度一致，且按名称顺序排列，
+# 第一张为参考图像，最后一张为参考图像，中间为变形图像
+# output_dir里面存放求解得到的结果文件，每张变形图的结果为“图像名称.mat”文件
+############################################
+
+# input_dir: 输入图像所在的文件夹路径
+C:/01project/DIC_platform/case10/image
+
+# output_dir: 结果输出文件夹路径
+C:/01project/DIC_platform/case10/results
+
+############################################
+# 🧠 网络结构参数（一般偶尔改）
+# hidden_units为PINN-DIC隐藏层神经元数目列表，控制网络宽度。
+# scale_networks为多尺度网络比例，用于改进收敛性和精度。
+# 例如scale_networks=[1,4,8,16]表示使用4个网络，分别对输入x乘以4个系数。
+# activation为激活函数名称（tanh/relu/sigmoid/leaky_relu/softplus/SiLU/sin），决定非线性表达能力。
+############################################
+
+# hidden_units: PINN-DIC隐藏层神经元数目列表
+[50, 50, 50]
+
+# activation: 激活函数名称
+tanh
+
+# first_activation: 首层激活函数名称
+sin
+
+# interpolation: 插值方法 [bspline, bilinear, bicubic]
+bicubic
+
+############################################
+# 🏋️‍♂️ 训练参数（常调整）
+############################################
+
+# adam_epochs: Adam轮数
+1000
+
+# bfgs_epochs: BFGS轮数
+1000
+
+# patience_adam: Adam提前停止的耐心循环轮数
+100
+# patience_bfgs: BFGS提前停止的耐心循环轮数
+100
+
+# delta_adam: Adam训练损失变化阈值
+0.5
+# delta_bfgs: BFGS训练损失变化阈值
+0.1
+
+
+# seed_flag: 判断是否使用种子点，使用的话请配置“Seed_Configuration.txt”
+True
+
+# seed_train_epochs: 种子点预训练轮数（不训练种子点提供网络输出的尺度系数）
+0
+
+############################################
+# ⚙️ 优化器细节参数（很少改）
+############################################
+
+# adam_lr: Adam预热学习率
+0.0001
+
+# adam_betas: Adam动量参数(beta1, beta2)
+[0.9, 0.999]
+
+# adam_decay: Adam权重衰减
+0.0
+
+# bfgs_lr: BFGS学习率
+1.0
+
+# bfgs_max_iter: BFGS最大迭代次数
+20
+
+# print_loss_freq: 打印loss频率
+10
