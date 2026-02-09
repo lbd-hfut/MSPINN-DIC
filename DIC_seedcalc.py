@@ -19,7 +19,7 @@ class RectangleROI:
 # 自动生成种子点位置
 # ============================================
 class seed_generator:
-    def __init__(self, config):
+    def __init__(self, config: SimpleNamespace):
         
         self.config = config
         self.ROI_LIST = BufferManager.mask
@@ -55,3 +55,4 @@ class seed_generator:
                 seed_points.append((int(xr), int(yr)))
             seed_points_list.append(jnp.array(seed_points, dtype=jnp.int32))
         return seed_points_list
+
