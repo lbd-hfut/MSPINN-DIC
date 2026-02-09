@@ -6,10 +6,10 @@
 ############################################
 
 # input_dir: 输入图像所在的文件夹路径
-C:/01project/DIC_platform/case10/image
+C:/LBD_File_Folder/02Project/Reserch/SegPINN-DIC/case/case9/image
 
 # output_dir: 结果输出文件夹路径
-C:/01project/DIC_platform/case10/results
+C:/LBD_File_Folder/02Project/Reserch/SegPINN-DIC/case/case9/results
 
 ############################################
 # 🧠 网络结构参数（一般偶尔改）
