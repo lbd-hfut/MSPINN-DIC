@@ -103,7 +103,7 @@ class CalcSeeds:
         
         # Step 4: 亚像素精化
         flage, defvector, corrcoef, diffnorm, num_iterations = iterativesearch_py(
-            defvector_init, fine_rectroi, num_thread, 
+            defvector_init, fine_rectroi, 
             max_iter = self.max_iterations,
             cutoff_diffnorm = self.cutoff_diffnorm,
             lambda_reg = self.lambda_reg
@@ -125,7 +125,7 @@ class CalcSeeds:
             valid_seed_pos = []
             valid_seed_uv  = []
             for i, (seed_x, seed_y) in enumerate(
-                tqdm(
+                tqdm.tqdm(
                     seed_points, 
                     desc="Processing seeds", 
                     total=len(seed_points))
@@ -348,7 +348,7 @@ def best_ncc_from_map(ncc_map):
 
     return best_x, best_y, max_ncc
 
-def _downsample_image(image: np.ndarray, factor: int) -> np.ndarray:
+def _downsample_image(image: jnp.ndarray, factor: int) -> jnp.ndarray:
     """降采样图像"""
     return image[::factor, ::factor].copy()
 
@@ -377,8 +377,8 @@ def _extract_reference_subset(reduction_multigrid: int,
     mask_reduced = rectroi.mask[::reduction_factor, ::reduction_factor]
     return ref_reduced, mask_reduced
 
-def _extract_region(image: np.ndarray, cx: int, cy: int, 
-                                radius: int) -> np.ndarray:
+def _extract_region(image: jnp.ndarray, cx: int, cy: int, 
+                                radius: int) -> jnp.ndarray:
     """提取圆形区域"""
     size = 2 * radius + 1
     y_start = max(0, cy - radius)
@@ -403,7 +403,7 @@ iterativesearch_jax       ← @jit，主循环（lax.while_loop）
     │    └─ inverse_compositional_update
 '''
 def iterativesearch_py(
-    defvector_init: np.ndarray,
+    defvector_init: jnp.ndarray,
     rectroi: RectangleROI,
     max_iter: int,
     cutoff_diffnorm: float,
@@ -413,9 +413,9 @@ def iterativesearch_py(
     xc = rectroi.x
     yc = rectroi.y
 
-    mask = rectroi.mask.reshape(-1).astype(np.float32)
-    dx = rectroi.X_flat.astype(np.float32)
-    dy = rectroi.Y_flat.astype(np.float32)
+    mask = rectroi.mask.reshape(-1).astype(jnp.float32)
+    dx = rectroi.X_flat.astype(jnp.int32)
+    dy = rectroi.Y_flat.astype(jnp.int32)
 
     # ---------- Reference image & gradient ----------
     X = xc + dx
@@ -426,7 +426,12 @@ def iterativesearch_py(
     fy = BufferManager.fy[Y, X]
     
     # ---------- numpy → jax ----------
-    defv0 = jnp.asarray(defvector_init, jnp.float32)
+    defv0 = jnp.asarray(
+        jnp.concatenate([
+            jnp.asarray(defvector_init, jnp.float32),
+            jnp.zeros(4, dtype=jnp.float32)
+        ])
+    )
     dx = jnp.asarray(dx)
     dy = jnp.asarray(dy)
     mask = jnp.asarray(mask)
@@ -491,7 +496,7 @@ def solve_linear_system(H, g, eps=1e-6):
 
 @jax.jit
 def safe_cholesky(H, eps=1e-6):
-    H_reg = H + eps * jnp.eye(6, dtype=H.dtype)
+    H_reg = H #+ eps * jnp.eye(6, dtype=H.dtype)
 
     def chol(_):
         return jnp.linalg.cholesky(H_reg), True
@@ -499,7 +504,7 @@ def safe_cholesky(H, eps=1e-6):
     def fail(_):
         return jnp.zeros_like(H_reg), False
 
-    is_safe = jnp.all(jnp.isfinite(H_reg)) & jnp.allclose(H_reg, H_reg.T, atol=1e-4)
+    is_safe = jnp.all(jnp.isfinite(H_reg)) #& jnp.allclose(H_reg, H_reg.T, atol=1e-4)
 
     return jax.lax.cond(
         is_safe, chol, fail, operand=None)
@@ -542,14 +547,14 @@ def newton_step(
         return delta
     def solve_fallback(_):
         return solve_linear_system(H, grad)
-    delta = jax.lax.cond(is_pd, solve_chol, solve_fallback)
+    delta = jax.lax.cond(is_pd, solve_chol, solve_fallback, operand=None)
     
     # ---------- update ----------
     diffnorm = jnp.linalg.norm(delta)
     defv_new = inverse_compositional_update(defv, delta)
     
     # ---------- correlation (optional) ---------
-    ok = jnp.isfinite(diffnorm) & valid
+    ok = jnp.isfinite(diffnorm) & valid 
     return defv_new, diffnorm, corrcoef, ok
 
 @jax.jit
@@ -582,8 +587,15 @@ def iterativesearch_jax(
 
     init = (0, defv, 1e10, -1.0, FAILED)
     it, defv, diffnorm, corrcoef, ok = jax.lax.while_loop(cond, body, init)
-
-    return defv, corrcoef, diffnorm, it, ok
+    # ---------- post check ----------
+    U, V = defv[0], defv[1]
+    U0, V0 = init[1][0], init[1][1]
+    disp_ok = (
+        (jnp.abs(U - U0) < 2.0) &
+        (jnp.abs(V - V0) < 2.0)
+    )
+    ok_final = ok & disp_ok
+    return defv, corrcoef, diffnorm, it, ok_final
 
 # -------------------------
 # B-spline 插值
@@ -707,6 +719,7 @@ def Seed_match_visualization(refImg, defImg, xy, uv, output_dir, basename, idx):
 
     # Determine save directory
     result_dir = output_dir
+    os.makedirs(result_dir, exist_ok=True)
     save_path = os.path.join(result_dir, basename + ".png")
 
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
