@@ -590,9 +590,10 @@ def iterativesearch_jax(
     # ---------- post check ----------
     U, V = defv[0], defv[1]
     U0, V0 = init[1][0], init[1][1]
+    step = jnp.sqrt(len(mask))
     disp_ok = (
-        (jnp.abs(U - U0) < 2.0) &
-        (jnp.abs(V - V0) < 2.0)
+        (jnp.abs(U - U0) < step) &
+        (jnp.abs(V - V0) < step)
     )
     ok_final = ok & disp_ok
     return defv, corrcoef, diffnorm, it, ok_final
