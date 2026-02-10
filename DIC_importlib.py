@@ -6,12 +6,14 @@ import copy
 import cv2
 import jax
 import math
+import tqdm
 import jax.numpy as jnp
+from jax import lax
 import numpy as np
 from PIL import Image
 from functools import partial
 from math import factorial
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, NamedTuple
 from sklearn.cluster import KMeans
 from types import SimpleNamespace
 from scipy.ndimage import label
