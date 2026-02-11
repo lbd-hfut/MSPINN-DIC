@@ -1,0 +1,36 @@
+[project]
+name = "segpinn-dic"
+version = "0.1.0"
+
+description = "SegPINN-DIC: physics-informed digital image correlation utilities"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Boda Li" },
+]
+
+requires-python = ">=3.10"
+
+keywords = ["dic", "pinn", "digital-image-correlation", "physics-informed"]
+
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Natural Language :: English",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Image Processing",
+  "Intended Audience :: Science/Research",
+  "Development Status :: 3 - Alpha",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/lbd-hfut/SegPINN-DIC"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = [
+  "*.py",
+  "utils/*.py",
+]
