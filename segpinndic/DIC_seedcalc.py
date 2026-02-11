@@ -1,5 +1,5 @@
-from DIC_importlib import *
-from DIC_readImg import BufferManager
+from segpinndic.DIC_importlib import *
+from segpinndic.DIC_readImg import BufferManager
 
 # ============================================
 # 数据结构定义
@@ -729,10 +729,10 @@ def Seed_match_visualization(refImg, defImg, xy, uv, output_dir, basename, idx):
     print(f"✅ Visualization saved to: {save_path}")
 
 if __name__ == "__main__":
-    from DIC_config import seed_config_txt, DIC_config_txt
-    from DIC_readImg import ImgDataset
-    seed_config_path = "Seed_Configuration.txt"
-    dic_config_path = "PINN-DIC-2D.txt"
+    from segpinndic.DIC_config import seed_config_txt, DIC_config_txt
+    from segpinndic.DIC_readImg import ImgDataset
+    seed_config_path = "../config/Seed_Configuration.txt"
+    dic_config_path = "../config/PINN-DIC-2D.txt"
 
     DIC_config = DIC_config_txt(dic_config_path)
     Seed_config = seed_config_txt(seed_config_path)

@@ -1,4 +1,4 @@
-from DIC_importlib import *
+from segpinndic.DIC_importlib import *
 
 # ============================================
 # 线程缓冲区 (用于存储中间计算结果)
@@ -220,9 +220,9 @@ if __name__ == "__main__":
     # build_seed_buffer_jax(refImg, mask)
     # build_DIC_buffer_jax(defImg)
     
-    from DIC_config import seed_config_txt, DIC_config_txt
-    seed_config_path = "Seed_Configuration.txt"
-    dic_config_path = "PINN-DIC-2D.txt"
+    from segpinndic.DIC_config import seed_config_txt, DIC_config_txt
+    seed_config_path = "../config/Seed_Configuration.txt"
+    dic_config_path = "../config/PINN-DIC-2D.txt"
 
     DIC_config = DIC_config_txt(dic_config_path)
     Seed_config = seed_config_txt(seed_config_path)

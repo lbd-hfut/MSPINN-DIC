@@ -1,4 +1,4 @@
-from DIC_importlib import *
+from segpinndic.DIC_importlib import *
 
 # ============================================
 # 读取种子点配置文件
