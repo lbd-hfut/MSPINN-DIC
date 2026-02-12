@@ -17,6 +17,7 @@ import jax.numpy as jnp
 from jax import lax
 from jax import vmap
 from jax.tree_util import tree_map
+import jax.nn
 import scipy.stats
 import numpy as np
 from PIL import Image
