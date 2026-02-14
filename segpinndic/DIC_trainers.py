@@ -61,20 +61,5 @@ class _Trainer:
 
         raise NotImplementedError
     
-def train_models_multiprocess(ip, devices, c, Trainer, wait=0):
-    "Helper function for training multiple runs at once (use with multiprocess.Pool)"
-
-    # small hack so that tensorboard summaries appear in order
-    time.sleep(wait)
-
-    # switch logger to a file logger
-    tag = os.environ["STY"].split(".")[-1] if "STY" in os.environ else "main"# grab socket name if using screen
-    logfile = f"screenlog.{tag:s}.{ip:d}.log"
-    switch_to_file_logger(logfile)
-
-    # start training on specific device
-    c.device = devices[ip]# set device to run on, based on process id
-    c.show_figures = c.clear_output = False# make sure plots are not shown
-    run = Trainer(c)
-    run.train()
     
+
