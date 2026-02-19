@@ -19,14 +19,14 @@ C:/LBD_File_Folder/02Project/Reserch/SegPINN-DIC/case/case9/results
 # activation为激活函数名称（tanh/relu/sigmoid/leaky_relu/softplus/SiLU/sin），决定非线性表达能力。
 ############################################
 
+# segment: 区域分割
+[4,8]
+
 # hidden_units: PINN-DIC隐藏层神经元数目列表
-[50, 50, 50]
+[32]
 
-# activation: 激活函数名称
-tanh
-
-# first_activation: 首层激活函数名称
-sin
+# network: 神经网络 ["FCN", "AdaptiveFCN", "SIREN", "AdaptiveSIREN"]
+FCN
 
 # interpolation: 插值方法 [bspline, bilinear, bicubic]
 bicubic
@@ -37,20 +37,6 @@ bicubic
 
 # adam_epochs: Adam轮数
 1000
-
-# bfgs_epochs: BFGS轮数
-1000
-
-# patience_adam: Adam提前停止的耐心循环轮数
-100
-# patience_bfgs: BFGS提前停止的耐心循环轮数
-100
-
-# delta_adam: Adam训练损失变化阈值
-0.5
-# delta_bfgs: BFGS训练损失变化阈值
-0.1
-
 
 # seed_flag: 判断是否使用种子点，使用的话请配置“Seed_Configuration.txt”
 True
@@ -70,12 +56,6 @@ True
 
 # adam_decay: Adam权重衰减
 0.0
-
-# bfgs_lr: BFGS学习率
-1.0
-
-# bfgs_max_iter: BFGS最大迭代次数
-20
 
 # print_loss_freq: 打印loss频率
 10

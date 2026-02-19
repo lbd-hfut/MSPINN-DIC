@@ -60,12 +60,10 @@ def seed_config_txt(path, verbose=True):
 
 
 ALL_KEYS = [
-    "input_dir", "output_dir",
-    "hidden_units", "activation", "first_activation", "interpolation",
-    "adam_epochs", "bfgs_epochs", "patience_adam", "patience_bfgs", 
-    "delta_adam", "delta_bfgs", "seed_flag", "seed_train_epochs",
-    "adam_lr", "adam_betas", "adam_decay", "bfgs_lr", "bfgs_max_iter",
-    "print_loss_freq"
+    "input_dir", "output_dir", "segment",
+    "hidden_units", "network", "interpolation",
+    "adam_epochs", "seed_flag", "seed_train_epochs",
+    "adam_lr", "print_loss_freq"
 ]
 # ============================================
 # 读取DIC配置文件
@@ -129,3 +127,8 @@ def DIC_config_txt(path, required_keys=ALL_KEYS, verbose=True):
             print(f"  {k}: {v}")
 
     return SimpleNamespace(**config)
+
+
+if __name__ == "__main__":
+    # 测试读取配置文件
+    config = DIC_config_txt("./config/PINN-DIC-2D.txt")
