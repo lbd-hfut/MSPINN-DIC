@@ -2,6 +2,7 @@ from segpinndic.DIC_importlib import pickle, np, optax, socket
 from segpinndic.utils import io
 
 from segpinndic import DIC_domains, DIC_decompositions, DIC_networks, DIC_schedulers
+from segpinndic.DIC_readImg import BufferManager
 
 class ConstantsBase:
 
@@ -21,16 +22,21 @@ class ConstantsBase:
     # calculated variables
     @property
     def summary_out_dir(self):
-        return f"results/summaries/{self.run}/"
+        return f"{self.reslut_dir}/summaries/{self.run}/"
     @property
     def model_out_dir(self):
-        return f"results/models/{self.run}/"
+        return f"{self.reslut_dir}/models/{self.run}/"
+    @property
+    def mat_out_dir(self):
+        return f"{self.reslut_dir}/mats/{self.run}/"
 
     def get_outdirs(self):
         io.get_dir(self.summary_out_dir)
         io.clear_dir(self.summary_out_dir)
         io.get_dir(self.model_out_dir)
         io.clear_dir(self.model_out_dir)
+        io.get_dir(self.mat_out_dir)
+        io.clear_dir(self.mat_out_dir)
 
     def save_constants_file(self):
         "Save a constants to file in self.summary_out_dir"
@@ -47,22 +53,28 @@ class ConstantsBase:
 # main constants class
 class Constants(ConstantsBase):
 
-    def __init__(self, **kwargs):
+    def __init__(self, DICconfig, **kwargs):
         "Defines global constants for model"
 
+        # Define results directories
+        self.reslut_dir = DICconfig.output_dir
         # Define run
-        self.run = "test"
+        self.run = getattr(DICconfig, "run", "PINN")
+        
+        # image shape
+        H, W = BufferManager.refImg.shape
 
         # Define domain
         self.domain = DIC_domains.RectangularDomainND
         self.domain_init_kwargs = dict(
-            xmin=np.array([0.]),
-            xmax=np.array([1.])
-            )
+            xmin=np.array([0., 0.]),
+            xmax=np.array([W-1., H-1.])
+        )
 
         # Define domain decomposition
-        subdomain_xs = [np.linspace(0,1,5)]
-        subdomain_ws = get_subdomain_ws(subdomain_xs, 2.99)
+        nx, ny = getattr(DICconfig, "n_subdomains", [4, 8])
+        subdomain_xs = [np.linspace(0, W-1, nx), np.linspace(0, H-1, ny)]
+        subdomain_ws = get_subdomain_ws(subdomain_xs, 1.99)
         self.decomposition = DIC_decompositions.RectangularDecompositionND
         self.decomposition_init_kwargs = dict(
             subdomain_xs=subdomain_xs,
@@ -71,32 +83,35 @@ class Constants(ConstantsBase):
             )
 
         # Define neural network
-        self.network = DIC_networks.FCN
+        net_name = DICconfig.network
+        if not hasattr(DIC_networks, net_name):
+            raise ValueError(f"Unknown network: {net_name}")
+        self.network = getattr(DIC_networks, net_name)
         self.network_init_kwargs = dict(
-            layer_sizes=[1, 32, 1],
+            layer_sizes=[2] + DICconfig.hidden_units + [2],
             )
 
         # Define scheduler
-        self.n_steps = 15000
+        self.n_steps = getattr(DICconfig, "adam_epochs", 15000)
         self.scheduler = DIC_schedulers.AllActiveSchedulerND
         self.scheduler_kwargs = dict()
 
         # Define optimisation parameters
-        self.ns = ((60,),)# batch_shape for each training constraint
+        self.ns = ((1,),)# batch_shape for placeholder
         self.n_test = (200,)# batch_shape for test data
         self.optimiser = optax.adam
         self.optimiser_kwargs = dict(
-            learning_rate=1e-3
+            learning_rate=getattr(DICconfig, "adam_lr", 1e-3)
             )
         self.seed = 0
 
         # Define summary output parameters
-        self.summary_freq    = 1000# outputs train stats to command line
-        self.test_freq       = 1000# outputs test stats to plot / file / command line
-        self.model_save_freq = 10000
-        self.show_figures = False# whether to show figures
-        self.save_figures = True# whether to save figures
-        self.clear_output = False# whether to clear ipython output periodically
+        self.summary_freq = getattr(DICconfig, "summary_freq", 1000)        # outputs train stats to command line
+        self.test_freq = getattr(DICconfig, "test_freq", 1000)              # outputs test stats to plot / file / command line
+        self.model_save_freq = getattr(DICconfig, "model_save_freq", 10000)
+        self.show_figures = getattr(DICconfig, "show_figures", False)       # whether to show figures
+        self.save_figures = getattr(DICconfig, "save_figures", True)        # whether to save figures
+        self.clear_output = getattr(DICconfig, "clear_output", False)       # whether to clear ipython output periodically
 
         # other constants
         self.hostname = socket.gethostname().lower()

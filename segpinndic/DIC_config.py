@@ -60,10 +60,11 @@ def seed_config_txt(path, verbose=True):
 
 
 ALL_KEYS = [
-    "input_dir", "output_dir", "segment",
+    "input_dir", "output_dir", "run", "n_subdomains",
     "hidden_units", "network", "interpolation",
     "adam_epochs", "seed_flag", "seed_train_epochs",
-    "adam_lr", "print_loss_freq"
+    "adam_lr", "summary_freq", "test_freq", "model_save_freq",
+     "show_figures",  "save_figures",  "clear_output"
 ]
 # ============================================
 # 读取DIC配置文件

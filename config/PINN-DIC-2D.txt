@@ -11,6 +11,9 @@ C:/LBD_File_Folder/02Project/Reserch/SegPINN-DIC/case/case9/image
 # output_dir: 结果输出文件夹路径
 C:/LBD_File_Folder/02Project/Reserch/SegPINN-DIC/case/case9/results
 
+# run: 项目名称
+PINN_TEST
+
 ############################################
 # 🧠 网络结构参数（一般偶尔改）
 # hidden_units为PINN-DIC隐藏层神经元数目列表，控制网络宽度。
@@ -19,10 +22,10 @@ C:/LBD_File_Folder/02Project/Reserch/SegPINN-DIC/case/case9/results
 # activation为激活函数名称（tanh/relu/sigmoid/leaky_relu/softplus/SiLU/sin），决定非线性表达能力。
 ############################################
 
-# segment: 区域分割
+# n_subdomains: 区域分割
 [4,8]
 
-# hidden_units: PINN-DIC隐藏层神经元数目列表
+# hidden_units: PINN-DIC神经元数目列表
 [32]
 
 # network: 神经网络 ["FCN", "AdaptiveFCN", "SIREN", "AdaptiveSIREN"]
@@ -57,5 +60,20 @@ True
 # adam_decay: Adam权重衰减
 0.0
 
-# print_loss_freq: 打印loss频率
-10
+# summary_freq: 打印求解loss频率
+1000
+
+# test_freq: 打印测试loss频率
+1000
+
+# model_save_freq: 模型保存频率
+10000
+
+# show_figures: 画出结果图
+False
+
+# save_figures: 保存图像
+True
+
+# clear_output: 是否定期清除 IPython 输出
+False
