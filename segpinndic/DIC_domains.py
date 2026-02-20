@@ -37,7 +37,7 @@ class Domain:
         raise NotImplementedError
     
     
-class DICDomain(Domain):
+class RectangularDomainND(Domain):
 
     @staticmethod
     def init_params(xmin, xmax, roi=None):
@@ -74,5 +74,5 @@ class DICDomain(Domain):
     
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    domain = DICDomain
+    domain = RectangularDomainND
     
