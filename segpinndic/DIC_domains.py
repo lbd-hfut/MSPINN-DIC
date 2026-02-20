@@ -37,26 +37,32 @@ class Domain:
         raise NotImplementedError
     
     
-class RectangularDomainND(Domain):
+class DICDomain(Domain):
 
     @staticmethod
-    def init_params(xmin, xmax):
+    def init_params(xmin, xmax, roi=None):
 
-        assert xmin.shape == xmax.shape
-        assert xmin.ndim == 1
-        xd = len(xmin)
+        assert roi.ndim == 2, "ROI must be (H, W) bool array"
+        H, W = roi.shape
+        
+        # ROI → coordinates
+        ys, xs = np.where(roi)
+        coords = np.stack([xs, ys], axis=1)   # (N,2)
+        N = coords.shape[0]
         
         static_params = {
-            "xd":xd,
+            "xd":2,
             "xmin":jnp.array(xmin),
             "xmax":jnp.array(xmax),
+            # DIC specific parameters
+            "coords": jnp.array(coords),   # ROI pixels
+            "N": N,
             }
         return static_params, {}
     
     @staticmethod
-    def sample_interior(all_params, batch_shape):
-        xmin, xmax = all_params["static"]["domain"]["xmin"], all_params["static"]["domain"]["xmax"]
-        return RectangularDomainND._rectangle_samplerND(xmin, xmax, batch_shape)
+    def sample_interior(all_params):
+        return all_params["static"]["domain"]["coords"]
 
     @staticmethod
     def norm_fn(all_params, x):
@@ -65,33 +71,8 @@ class RectangularDomainND(Domain):
         x = DIC_networks.norm(mu, sd, x)
         return x
     
-    @staticmethod
-    def _rectangle_samplerND(xmin, xmax, batch_shape):
-        "Get flattened samples of x in a rectangle, either on mesh or random"
-
-        assert xmin.shape == xmax.shape
-        assert xmin.ndim == 1
-        xd = len(xmin)
-        assert len(batch_shape) == xd
-
-        xs = [jnp.linspace(xmin, xmax, b) for xmin,xmax,b in zip(xmin, xmax, batch_shape)]
-        xx = jnp.stack(jnp.meshgrid(*xs, indexing="ij"), -1)# (batch_shape, xd)
-        x_batch = xx.reshape((-1, xd))
-
-        return jnp.array(x_batch)
-    
     
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    domain = RectangularDomainND
-    # 2D
-    xmin, xmax = jnp.array([0,1]), jnp.array([1,2])
-    batch_shape = (10,20)
+    domain = DICDomain
     
-    ps_ = domain.init_params(xmin, xmax)
-    all_params = {"static":{"domain":ps_[0]}, "trainable":{"domain":ps_[1]}}
-    x_batch = domain.sample_interior(all_params, batch_shape)
-    
-    plt.figure()
-    plt.scatter(x_batch[:,0], x_batch[:,1])
-    plt.show()
