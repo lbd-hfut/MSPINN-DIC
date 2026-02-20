@@ -53,7 +53,7 @@ class ConstantsBase:
 # main constants class
 class Constants(ConstantsBase):
 
-    def __init__(self, DICconfig, **kwargs):
+    def __init__(self, DICconfig, roi):
         "Defines global constants for model"
 
         # Define results directories
@@ -62,18 +62,34 @@ class Constants(ConstantsBase):
         self.run = getattr(DICconfig, "run", "PINN")
         
         # image shape
-        H, W = BufferManager.refImg.shape
+        roi = np.asarray(roi)
+        assert roi.ndim == 2, "ROI must be (H, W) bool array"
+        H, W = roi.shape
+        
+        ys, xs = np.where(roi)
+        if len(xs) == 0:
+            raise ValueError("ROI is empty")
+
+        xmin_roi = xs.min()
+        xmax_roi = xs.max()
+        ymin_roi = ys.min()
+        ymax_roi = ys.max()
+        
+        self.roi_bbox = (xmin_roi, xmax_roi, ymin_roi, ymax_roi)
 
         # Define domain
         self.domain = DIC_domains.RectangularDomainND
         self.domain_init_kwargs = dict(
-            xmin=np.array([0., 0.]),
-            xmax=np.array([W-1., H-1.])
+            xmin=np.array([xmin_roi, ymin_roi]),
+            xmax=np.array([xmax_roi, ymax_roi])
         )
 
         # Define domain decomposition
         nx, ny = getattr(DICconfig, "n_subdomains", [4, 8])
-        subdomain_xs = [np.linspace(0, W-1, nx), np.linspace(0, H-1, ny)]
+        subdomain_xs = [
+            np.linspace(xmin_roi, xmax_roi, nx), 
+            np.linspace(ymin_roi, ymax_roi, ny)
+            ]
         subdomain_ws = get_subdomain_ws(subdomain_xs, 1.99)
         self.decomposition = DIC_decompositions.RectangularDecompositionND
         self.decomposition_init_kwargs = dict(
@@ -116,9 +132,9 @@ class Constants(ConstantsBase):
         # other constants
         self.hostname = socket.gethostname().lower()
 
+    def load_kwargs(self, **kwargs):
         # overwrite with input arguments
         for key in kwargs.keys(): self[key] = kwargs[key]# invokes __setitem__ in ConstantsBase
-
 
 def print_c_dicts(c_dicts):
     "Pretty print a list of c_dicts"
