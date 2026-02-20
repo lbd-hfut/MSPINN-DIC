@@ -81,7 +81,8 @@ class Constants(ConstantsBase):
         self.domain = DIC_domains.RectangularDomainND
         self.domain_init_kwargs = dict(
             xmin=np.array([xmin_roi, ymin_roi]),
-            xmax=np.array([xmax_roi, ymax_roi])
+            xmax=np.array([xmax_roi, ymax_roi]),
+            roi=roi
         )
 
         # Define domain decomposition
