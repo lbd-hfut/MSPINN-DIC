@@ -209,102 +209,60 @@ class RectangularDecompositionND(Decomposition):
 
         if active is None:
             active = np.ones(m)
+            
+        a,b = iaxes
+        if create_fig: f = plt.figure(figsize=(8,8))
+        else: f = plt.gcf()
 
-        # 1D plots
-        if xd == 1:
+        # get domain params
+        xmins, xmaxs, wmins, wmaxs, *_ = params["static"]["decomposition"]["subdomain"]["params"]
+        mus, sds = (xmaxs+xmins)/2, (xmaxs-xmins)/2
 
-            if create_fig: f = plt.figure(figsize=(8,4))
-            else: f = plt.gcf()
+        # plot subdomains
+        lines = np.empty((m, 4, 2, 2))# 0,1,2,3 counterclockwise from x axes
+        lines[:,0,0,0] = lines[:,2,0,0] = lines[:,3,0,0] = lines[:,3,1,0] = xmins[:,a]
+        lines[:,0,1,0] = lines[:,1,0,0] = lines[:,1,1,0] = lines[:,2,1,0] = xmaxs[:,a]
+        lines[:,0,0,1] = lines[:,0,1,1] = lines[:,1,0,1] = lines[:,3,0,1] = xmins[:,b]
+        lines[:,1,1,1] = lines[:,2,0,1] = lines[:,2,1,1] = lines[:,3,1,1] = xmaxs[:,b]
+        lws = np.array([[3 if active[im] else 1]*4 for im in range(m)]).flatten()
+        alphas = np.array([[1 if active[im] else 0.5]*4 for im in range(m)]).flatten()
+        lss = np.array([[":" if active[im]==2 else "-"]*4 for im in range(m)]).flatten()
+        cs = np.array([[colors[im]]*4 for im in range(m)]).flatten()
+        lines = mcoll.LineCollection(lines.reshape((-1,2,2)),
+                                        linewidths=lws,
+                                        alpha=alphas,
+                                        linestyles=lss,
+                                        colors=cs)
+        plt.gca().add_collection(lines)
 
-            for im in range(m):
-                # get domain params
-                param = tree_index(params, im)
-                xmin, xmax, wmin, wmax, *_ = param["static"]["decomposition"]["subdomain"]["params"]
-                mu, sd = (xmax+xmin)/2, (xmax-xmin)/2
+        # plot active norms
+        if show_norm:
+            alphas = np.array([1 if active[im] else 0 for im in range(m)])
+            cs = np.array([colors[im] for im in range(m)])
+            plt.scatter(mus[:,a], mus[:,b], color=cs, alpha=alphas, s=100)
+            plt.scatter(mus[:,a]+sds[:,a], mus[:,b]+sds[:,b], color=cs, alpha=alphas, s=100, edgecolor="k")
 
-                # plot subdomain
-                h = -0.1-0.1*(im%4)
-                plt.hlines(h, xmin[0], xmax[0], colors=colors[im],
-                           linewidth=5 if active[im] else 2,
-                           alpha=1 if active[im] else 0.5,
-                           linestyle=":" if active[im]==2 else "-")
-
-                if active[im]:
-                    # plot active norm
-                    if show_norm:
-                        plt.scatter(mu[0], h, color=colors[im], s=100)
-                        plt.scatter(mu[0]+sd[0], h, color=colors[im], s=100, edgecolor="k")
-
-                    # plot active window
-                    x = np.linspace(xmin[0], xmax[0], 100).reshape((-1,1))
-                    w = vmap(RectangularDecompositionND.window_fn, in_axes=(None,0))(param, x)
-                    plt.plot(x[:,0], w[:,0], c=colors[im],
-                             linestyle=":" if active[im]==2 else "-")
-
-            # plot summed windows (expensive!)
-            if show_window:
-                xmins, xmaxs, wmins, wmaxs, *_ = params["static"]["decomposition"]["subdomain"]["params"]
-                xmin, xmax = xmins.min(0), xmaxs.max(0)
-                x = np.linspace(xmin[0], xmax[0], 1000).reshape((-1,1))
-                ws = vmap(vmap(RectangularDecompositionND.window_fn, in_axes=(None,0)), in_axes=(0,None))(params, x)
-                w = ws.sum(0)
-                plt.plot(x[:,0], w[:,0], color="tab:grey", alpha=0.5)
-
-        # 2D+ plots
-        else:
-            a,b = iaxes
-            if create_fig: f = plt.figure(figsize=(8,8))
-            else: f = plt.gcf()
-
-            # get domain params
-            xmins, xmaxs, wmins, wmaxs, *_ = params["static"]["decomposition"]["subdomain"]["params"]
-            mus, sds = (xmaxs+xmins)/2, (xmaxs-xmins)/2
-
-            # plot subdomains
-            lines = np.empty((m, 4, 2, 2))# 0,1,2,3 counterclockwise from x axes
-            lines[:,0,0,0] = lines[:,2,0,0] = lines[:,3,0,0] = lines[:,3,1,0] = xmins[:,a]
-            lines[:,0,1,0] = lines[:,1,0,0] = lines[:,1,1,0] = lines[:,2,1,0] = xmaxs[:,a]
-            lines[:,0,0,1] = lines[:,0,1,1] = lines[:,1,0,1] = lines[:,3,0,1] = xmins[:,b]
-            lines[:,1,1,1] = lines[:,2,0,1] = lines[:,2,1,1] = lines[:,3,1,1] = xmaxs[:,b]
-            lws = np.array([[3 if active[im] else 1]*4 for im in range(m)]).flatten()
-            alphas = np.array([[1 if active[im] else 0.5]*4 for im in range(m)]).flatten()
-            lss = np.array([[":" if active[im]==2 else "-"]*4 for im in range(m)]).flatten()
-            cs = np.array([[colors[im]]*4 for im in range(m)]).flatten()
-            lines = mcoll.LineCollection(lines.reshape((-1,2,2)),
-                                         linewidths=lws,
-                                         alpha=alphas,
-                                         linestyles=lss,
-                                         colors=cs)
-            plt.gca().add_collection(lines)
-
-            # plot active norms
-            if show_norm:
-                alphas = np.array([1 if active[im] else 0 for im in range(m)])
-                cs = np.array([colors[im] for im in range(m)])
-                plt.scatter(mus[:,a], mus[:,b], color=cs, alpha=alphas, s=100)
-                plt.scatter(mus[:,a]+sds[:,a], mus[:,b]+sds[:,b], color=cs, alpha=alphas, s=100, edgecolor="k")
-
-            # plot summed windows (expensive!)
-            if show_window:
-                xmin, xmax = xmins.min(0), xmaxs.max(0)
-                x = np.tile(np.expand_dims((xmax+xmin)/2, 0), (150**2, 1))
-                xs = [np.linspace(mi, ma, 150) for mi,ma in zip(xmin[np.array([a,b])],xmax[np.array([a,b])])]
-                xxs = np.stack(np.meshgrid(*xs, indexing="ij"), 0)# (2, nm)
-                x_ = xxs.reshape((2, 150**2)).T
-                x[:,a] = x_[:,0]; x[:,b] = x_[:,1]
-                ws = vmap(vmap(RectangularDecompositionND.window_fn, in_axes=(None,0)), in_axes=(0,None))(params, x)
-                ww = ws.sum(0).reshape((150,150))
-                plt.imshow(ww.T,
-                           origin="lower", extent=(xmin[a], xmax[a], xmin[b], xmax[b]),
-                           cmap="bwr", vmin=0, vmax=2, zorder=-99)
-
-            # set axis limits / labels / aspect ratio
+        # plot summed windows (expensive!)
+        if show_window:
             xmin, xmax = xmins.min(0), xmaxs.max(0)
-            mi, ma = xmin-0.05*(xmax-xmin), xmax+0.05*(xmax-xmin)
-            plt.xlim(mi[a], ma[a]); plt.ylim(mi[b], ma[b])
-            plt.xlabel(a); plt.ylabel(b)
-            plt.gca().set_aspect("equal")
+            x = np.tile(np.expand_dims((xmax+xmin)/2, 0), (150**2, 1))
+            xs = [np.linspace(mi, ma, 150) for mi,ma in zip(xmin[np.array([a,b])],xmax[np.array([a,b])])]
+            xxs = np.stack(np.meshgrid(*xs, indexing="ij"), 0)# (2, nm)
+            x_ = xxs.reshape((2, 150**2)).T
+            x[:,a] = x_[:,0]; x[:,b] = x_[:,1]
+            ws = vmap(vmap(RectangularDecompositionND.window_fn, in_axes=(None,0)), in_axes=(0,None))(params, x)
+            ww = ws.sum(0).reshape((150,150))
+            plt.imshow(ww.T,
+                        origin="lower", extent=(xmin[a], xmax[a], xmin[b], xmax[b]),
+                        cmap="bwr", vmin=0, vmax=2, zorder=-99)
 
+        # set axis limits / labels / aspect ratio
+        xmin, xmax = xmins.min(0), xmaxs.max(0)
+        mi, ma = xmin-0.05*(xmax-xmin), xmax+0.05*(xmax-xmin)
+        plt.xlim(mi[a], ma[a]); plt.ylim(mi[b], ma[b])
+        plt.xlabel(a); plt.ylabel(b)
+        plt.gca().set_aspect("equal")
+        
         return f
 
 
@@ -352,6 +310,7 @@ def _inside_sum_batch(all_params, x_batch, ims, batch_size, inside_fn):
     """
     Computes summary statistics of which (point, model) pairs satisfy `inside_fn`,
     processing the data in fixed-size batches.
+    Statistical information (without generating a specific index)
 
     Args:
         all_params: Model parameters (pytree).
@@ -392,7 +351,7 @@ def _inside_sum_batch(all_params, x_batch, ims, batch_size, inside_fn):
     # inside_ips: Which points belong to at least one model
     # inside_ims: How many points does each model contain?
     inside_ips = jnp.concatenate([s1[:-1].ravel(), s1[-1][shift:]], axis=0)# (n)
-    inside_ims = s2.sum(0)# (m)
+    inside_ims = s2.sum(0)# (m) # Does each subdomain fall into any points?
     d = (inside_ims.mean()**(1/x_batch.shape[1]))# average number of points per model
     s = inside_ims.sum() # How many pairs are inside in total?
     inside_ims = inside_ims.astype(bool)
@@ -402,6 +361,7 @@ def _inside_sum_batch(all_params, x_batch, ims, batch_size, inside_fn):
 def _inside_take_batch(all_params, x_batch, ims, batch_size, inside_fn, s, irange, mask):
     """
     Processes a single batch.
+    Actually generate the index list of which (point, model) pairs satisfy `inside_fn`.
 
     Args:
         x: Tuple (i, mask)
@@ -452,7 +412,7 @@ def inside_points_batch(all_params, x_batch, ims, batch_size, inside_fn):
     inside_ims = jnp.arange(ims.shape[0])[inside_ims] # Convert the Boolean mask into a model index
     s = s.item()
     take = _inside_take_batch(all_params, x_batch, ims, batch_size, inside_fn, s, irange, mask)
-    # point_indices model_indices valid_model_indices
+    # point_indices, model_indices, valid_model_indices
     return take[:,0], take[:,1], inside_ims
 
 def inside_models_batch(all_params, x_batch, ims, batch_size, inside_fn):
@@ -473,82 +433,6 @@ def inside_models_batch(all_params, x_batch, ims, batch_size, inside_fn):
 
 
 if __name__ == "__main__":
-
-    # import jax.random as random
-
-    # def inside_fn(all_params, x_batch, ims):
-    #     "Code for assessing if point is in ND hyperrectangle"
-    #     x_batch = jnp.expand_dims(x_batch, 1)# (n,1,xd)
-    #     xmins = jnp.expand_dims(all_params[0][ims], 0)# (1,mc,xd)
-    #     xmaxs = jnp.expand_dims(all_params[1][ims], 0)# (1,mc,xd)
-    #     inside = (x_batch >= xmins) & (x_batch <= xmaxs)# (n,mc,xd)
-    #     inside = jnp.all(inside, -1)# (n,mc) keep as bool to reduce memory
-    #     return inside
-
-    # def inside(all_params, x_batch, ims, inside_fn):
-    #     "full batch code to compare to"
-    #     inside = inside_fn(all_params, x_batch, ims)# (n, m)
-    #     n_take, m_take = jnp.nonzero(inside)
-    #     inside_ims = jnp.nonzero(jnp.any(inside, axis=0))[0]
-    #     inside_ips = jnp.nonzero(jnp.any(inside, axis=1))[0]
-    #     return n_take, m_take, inside_ims, inside_ips
-
-    # n,m = 10000, 1000
-    # x_batch = random.uniform(random.PRNGKey(0), (n,2), minval=0, maxval=2)
-    # c = random.uniform(random.PRNGKey(0), (m,2), minval=1, maxval=3)
-    # xmin, xmax = c.copy(), c.copy()
-    # xmin -= 0.1
-    # xmax += 0.1
-    # all_params = [xmin, xmax]
-    # ims = jnp.arange(m)
-
-    # n_take_true, m_take_true, inside_ims_true, inside_ips_true = inside(all_params, x_batch, ims, inside_fn)
-
-    # for batch_size in [1, 9, 10, 128, n]:
-    #     print(batch_size)
-
-    #     n_take, m_take, inside_ims = inside_points_batch(all_params, x_batch, ims, batch_size, inside_fn)
-    #     inside_ips, d = inside_models_batch(all_params, x_batch, ims, batch_size, inside_fn)
-
-    #     assert (n_take_true==n_take).all()
-    #     assert (m_take_true==m_take).all()
-    #     assert (inside_ims_true==inside_ims).all()
-    #     assert (inside_ips_true==inside_ips).all()
-    
-    ## 1D test
-    subdomain_xs = [np.linspace(-3,3,4),]
-    subdomain_ws = [3*np.ones(4),]
-
-    decomposition = RectangularDecompositionND
-    ps_ = decomposition.init_params(subdomain_xs, subdomain_ws, (0,1))
-    all_params = {"static":{"decomposition":ps_[0]}, "trainable":{"decomposition":ps_[1]}}
-    m = all_params["static"]["decomposition"]["m"]
-    active = np.ones(m)
-
-    active[1] = 0
-    active[2] = 2
-    decomposition.plot(all_params, active=active, show_norm=True, show_window=True)
-    x_batch = np.array([[-2],
-                        [1],
-                        [3],
-                        [4.7]])
-    for x in x_batch:
-        plt.scatter(x[0], 0.5)
-    plt.show()
-    print(decomposition.inside_models(all_params, x_batch, np.arange(m)))
-    print(decomposition.inside_points(all_params, x_batch))
-
-    # single subdomain test
-    subdomain_xs = [np.array([0])]
-    subdomain_ws = [np.array([1])]
-
-    decomposition = RectangularDecompositionND
-    ps_ = decomposition.init_params(subdomain_xs, subdomain_ws, (0,1))
-    all_params = {"static":{"decomposition":ps_[0]}, "trainable":{"decomposition":ps_[1]}}
-
-    decomposition.plot(all_params)
-    plt.show()
-    
     
     ## 2D test
     subdomain_xs = [np.linspace(-3,3,4), np.linspace(-2,2,3)]
