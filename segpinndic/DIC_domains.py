@@ -40,7 +40,17 @@ class Domain:
 class RectangularDomainND(Domain):
 
     @staticmethod
-    def init_params(xmin, xmax, roi=None):
+    def init_params(xmin, xmax):
+        
+        static_params = {
+            "xd":2,
+            "xmin":jnp.array(xmin),
+            "xmax":jnp.array(xmax),
+            }
+        return static_params, {}
+    
+    @staticmethod
+    def sample_interior(roi=None):
 
         assert roi.ndim == 2, "ROI must be (H, W) bool array"
         H, W = roi.shape
@@ -48,21 +58,8 @@ class RectangularDomainND(Domain):
         # ROI → coordinates
         ys, xs = np.where(roi)
         coords = np.stack([xs, ys], axis=1)   # (N,2)
-        N = coords.shape[0]
-        
-        static_params = {
-            "xd":2,
-            "xmin":jnp.array(xmin),
-            "xmax":jnp.array(xmax),
-            # DIC specific parameters
-            "coords": jnp.array(coords),   # ROI pixels
-            "N": N,
-            }
-        return static_params, {}
-    
-    @staticmethod
-    def sample_interior(all_params):
-        return all_params["static"]["domain"]["coords"]
+
+        return coords
 
     @staticmethod
     def norm_fn(all_params, x):
