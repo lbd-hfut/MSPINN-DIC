@@ -96,7 +96,7 @@ class Constants(ConstantsBase):
         self.decomposition_init_kwargs = dict(
             subdomain_xs=subdomain_xs,
             subdomain_ws=subdomain_ws,
-            unnorm=(0., 1.),
+            unnorm=(-1., 1.),
             )
 
         # Define neural network
