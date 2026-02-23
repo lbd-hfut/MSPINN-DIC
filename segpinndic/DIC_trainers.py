@@ -175,14 +175,26 @@ def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
 
     # take subdomain params
     d = all_params
-    all_params_take = {t_k: {cl_k: {k: jax.tree_map(lambda p:p[m_take], d[t_k][cl_k][k]) if k=="subdomain" else d[t_k][cl_k][k]
-        for k in d[t_k][cl_k]}
-        for cl_k in d[t_k]}
-        for t_k in ["static", "trainable"]}
-    f = {t_k: {cl_k: {k: jax.tree_map(lambda p: 0, d[t_k][cl_k][k]) if k=="subdomain" else jax.tree_map(lambda p: None, d[t_k][cl_k][k])
-        for k in d[t_k][cl_k]}
-        for cl_k in d[t_k]}
-        for t_k in ["static", "trainable"]}
+    all_params_take = {
+        t_k: {
+            cl_k: {
+                k: jax.tree_map(lambda p:p[m_take], d[t_k][cl_k][k]) if k=="subdomain" else d[t_k][cl_k][k]
+                for k in d[t_k][cl_k]
+            }
+            for cl_k in d[t_k]
+        }
+        for t_k in ["static", "trainable"]
+    }
+    f = {
+        t_k: {
+            cl_k: {
+                k: jax.tree_map(lambda p: 0, d[t_k][cl_k][k]) if k=="subdomain" else jax.tree_map(lambda p: None, d[t_k][cl_k][k])
+                for k in d[t_k][cl_k]
+            }
+            for cl_k in d[t_k]
+        }
+        for t_k in ["static", "trainable"]
+    }
     logger.debug("all_params")
     logger.debug(jax.tree_map(lambda x: str_tensor(x), all_params))
     logger.debug("all_params_take")
@@ -224,6 +236,14 @@ def PINN_model(all_params, x_batch, model_fns, verbose=True):
     return u, u_raw
 
 def FBPINN_forward(all_params, x_batch, takes, model_fns, jmaps):
+    "Computes uv of FBPINN model"
+    return FBPINN_model(all_params, x_batch, takes, model_fns)[0]
+
+def PINN_forward(all_params, x_batch, model_fns, jmaps):
+    "Computes uv of PINN model"
+    return PINN_model(all_params, x_batch, model_fns)[0]
+
+def FBPINN_predict_forward(all_params, x_batch, takes, model_fns, jmaps):
     "Computes gradients of FBPINN model"
 
     # isolate model function
@@ -231,7 +251,7 @@ def FBPINN_forward(all_params, x_batch, takes, model_fns, jmaps):
         return FBPINN_model(all_params, x_batch, takes, model_fns)[0], ()
     return _get_ujs(x_batch, jmaps, u)
 
-def PINN_forward(all_params, x_batch, model_fns, jmaps):
+def PINN_predict_forward(all_params, x_batch, model_fns, jmaps):
     "Computes gradients of PINN model"
 
     # isolate model function
@@ -275,51 +295,45 @@ def jacfwd(f, v):
         return j, aux
     return jacfun
 
-def FBPINN_loss(active_params, fixed_params, static_params, takess, constraints, model_fns, jmapss, loss_fn):
+def FBPINN_loss(active_params, fixed_params, static_params, takes, x_batch, model_fns, loss_fn):
 
     # add fixed params to active, recombine all_params
     d, da = active_params, fixed_params
-    trainable_params = {cl_k: {k: jax.tree_map(lambda p1, p2:jnp.concatenate([p1,p2],0), d[cl_k][k], da[cl_k][k]) if k=="subdomain" else d[cl_k][k]
-        for k in d[cl_k]}
-        for cl_k in d}
+    trainable_params = {
+        cl_k: {
+            k: jax.tree_map(
+                    lambda p1, p2:jnp.concatenate([p1,p2],0), 
+                    d[cl_k][k], 
+                    da[cl_k][k]
+                ) if k=="subdomain" else d[cl_k][k]
+                for k in d[cl_k]
+            }
+            for cl_k in d
+        }
     all_params = {"static":static_params, "trainable":trainable_params}
 
-    # run FBPINN for each constraint, with shared params
-    constraints_ = []
-    for takes, jmaps, constraint in zip(takess, jmapss, constraints):
-        logger.debug("constraint")
-        for c_ in constraint:
-            logger.debug(str_tensor(c_))
-        x_batch = constraint[0]
-        ujs = FBPINN_forward(all_params, x_batch, takes, model_fns, jmaps)
-        constraints_.append(constraint+ujs)
-    return loss_fn(all_params, constraints_)
+    # run FBPINN 
+    u = FBPINN_forward(all_params, x_batch, takes, model_fns)
+    return loss_fn(all_params, x_batch, u)
 
-def PINN_loss(active_params, static_params, constraints, model_fns, jmapss, loss_fn):
+def PINN_loss(active_params, static_params, x_batch, model_fns, loss_fn):
 
     # recombine all_params
     all_params = {"static":static_params, "trainable":active_params}
 
-    # run PINN for each constraint, with shared params
-    constraints_ = []
-    for jmaps, constraint in zip(jmapss, constraints):
-        logger.debug("constraint")
-        for c_ in constraint:
-            logger.debug(str_tensor(c_))
-        x_batch = constraint[0]
-        ujs = PINN_forward(all_params, x_batch, model_fns, jmaps)
-        constraints_.append(constraint+ujs)
-    return loss_fn(all_params, constraints_)
+    # run PINN 
+    u = PINN_forward(all_params, x_batch, model_fns)
+    return loss_fn(all_params, x_batch, u)
 
 @partial(jit, static_argnums=(0, 5, 8, 9, 10))
 def FBPINN_update(optimiser_fn, active_opt_states,
                   active_params, fixed_params, static_params_dynamic, static_params_static,
-                  takess, constraints, model_fns, jmapss, loss_fn):
+                  takes, x_batch, model_fns, loss_fn):
     # recombine static params
     static_params = combine(static_params_dynamic, static_params_static)
     # update step
     lossval, grads = value_and_grad(FBPINN_loss, argnums=0)(
-        active_params, fixed_params, static_params, takess, constraints, model_fns, jmapss, loss_fn)
+        active_params, fixed_params, static_params, takes, x_batch, model_fns, loss_fn)
     updates, active_opt_states = optimiser_fn(grads, active_opt_states, active_params)
     active_params = optax.apply_updates(active_params, updates)
     return lossval, active_opt_states, active_params
@@ -327,12 +341,12 @@ def FBPINN_update(optimiser_fn, active_opt_states,
 @partial(jit, static_argnums=(0, 4, 6, 7, 8))
 def PINN_update(optimiser_fn, active_opt_states,
                 active_params, static_params_dynamic, static_params_static,
-                constraints, model_fns, jmapss, loss_fn):
+                x_batch, model_fns, loss_fn):
     # recombine static params
     static_params = combine(static_params_dynamic, static_params_static)
     # update step
     lossval, grads = value_and_grad(PINN_loss, argnums=0)(
-        active_params, static_params, constraints, model_fns, jmapss, loss_fn)
+        active_params, static_params, x_batch, model_fns, loss_fn)
     updates, active_opt_states = optimiser_fn(grads, active_opt_states, active_params)
     active_params = optax.apply_updates(active_params, updates)
     return lossval, active_opt_states, active_params
