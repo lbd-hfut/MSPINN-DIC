@@ -162,7 +162,7 @@ def PINN_model_inner(all_params, x, norm_fn, network_fn, unnorm_fn):
 def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
     "Defines FBPINN model"
 
-    norm_fn, network_fn, unnorm_fn, window_fn, constraining_fn = model_fns
+    norm_fn, network_fn, unnorm_fn, window_fn = model_fns
     m_take, n_take, p_take, np_take, npou = takes
 
     # take x_batch
@@ -211,7 +211,7 @@ def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
 def PINN_model(all_params, x_batch, model_fns, verbose=True):
     "Defines PINN model"
 
-    norm_fn, network_fn, unnorm_fn, constraining_fn = model_fns
+    norm_fn, network_fn, unnorm_fn = model_fns
     log_ = logger.info if verbose else logger.debug
     log_("x_batch")
     log_(str_tensor(x_batch))# (n, xd)
