@@ -478,52 +478,26 @@ def _common_train_initialisation(c, key, all_params, problem, domain):
 
     # get global constraints (training points)
     key, subkey = random.split(key)
-    constraints_global = problem.sample_constraints(all_params=all_params, domain=domain, key=subkey, sampler=c.sampler, batch_shapes=c.ns)
-    for constraint_ in constraints_global:
-        for c_ in constraint_[:-1]:
-            assert c_.shape[0] == constraint_[0].shape[0]
+    constraints_global = problem.sample_constraints(all_params=all_params, domain=domain)
+    
     # parse global constraints
-    x_batch_global = jnp.concatenate([constraint_[0] for constraint_ in constraints_global])# (n, xd)
-    constraint_offsets_global = jnp.array([0]+[constraint_[0].shape[0] for constraint_ in constraints_global[:-1]], dtype=int).cumsum()# (c,) offset index of each constraint
-    constraint_fs_global = jnp.zeros((x_batch_global.shape[0], len(constraints_global)), dtype=bool)# (n, c)
-    for ic in range(len(constraints_global)):# fill in constraint filters
-        constraint_fs_global = constraint_fs_global.at[
-            constraint_offsets_global[ic]:constraint_offsets_global[ic]+constraints_global[ic][0].shape[0], ic].set(True)
-    required_ujss = [constraint_[-1] for constraint_ in constraints_global]
-    constraints_global = [constraint_[:-1] for constraint_ in constraints_global]
-    logger.info(f"Total number of constraints: {len(constraints_global)}")
-    logger.debug("constraints_global")
-    logger.debug(jax.tree_map(lambda x: str_tensor(x), constraints_global))
-    logger.debug(constraint_offsets_global)
-    logger.debug(str_tensor(constraint_fs_global))
-    logger.debug(required_ujss)
+    x_batch_global = constraints_global[0][0]# (n, xd)
+    
+    required_ujs = constraints_global[0][1]
     logger.debug("x_batch_global")
     logger.debug(str_tensor(x_batch_global))
 
     # get jac maps
-    jmapss = tuple(get_jmaps(required_ujs) for required_ujs in required_ujss)
-
-    # get test points - for now, just use global interior points
-    x_batch_test = domain.sample_interior(all_params=all_params, key=None, sampler="grid", batch_shape=c.n_test)
-    logger.debug("x_batch_test")
-    logger.debug(str_tensor(x_batch_test))
-
-    # get exact solution if it exists
-    logger.info("Computing exact solution..")
-    u_exact = problem.exact_solution(all_params=all_params, x_batch=x_batch_test, batch_shape=c.n_test)
-    logger.info("Computing done")
-    logger.debug("u_exact")
-    logger.debug(str_tensor(u_exact))
+    jmaps = get_jmaps(required_ujs)
 
     return (optimiser, all_opt_states, optimiser_fn, loss_fn, key,
-            constraints_global, x_batch_global, constraint_offsets_global, constraint_fs_global, jmapss,
-            x_batch_test, u_exact)
+            x_batch_global, jmaps)
 
 
 class FBPINNTrainer(_Trainer):
     "FBPINN model trainer class"
 
-    def _get_x_batch(self, i, active, all_params, x_batch_global, constraints_global, constraint_fs_global, constraint_offsets_global, decomposition):
+    def _get_x_batch(self, i, active, all_params, x_batch_global, decomposition):
         "Get the x_batch points from x_batch_global which are inside active models"
 
         # cut active points out of x_batch_global
@@ -536,21 +510,9 @@ class FBPINNTrainer(_Trainer):
         logger.debug("x_batch")
         logger.debug(str_tensor(x_batch))
 
-        # cut same points out of constraints_global
-        constraint_fs = constraint_fs_global[training_ips]# for each training point, whether in constraint
-        ix_ = jnp.arange(x_batch.shape[0])
-        constraint_ips = [ix_[f] for f in constraint_fs.T]# indices of training points in each constraint
-        constraints = [[c_[training_ips[constraint_ips[ic]]-constraint_offsets_global[ic]]
-                        for c_ in constraints_global[ic]]
-                       for ic in range(len(constraints_global))]# cut constraints
-        logger.debug("constraints")
-        logger.debug(jax.tree_map(lambda x: str_tensor(x), constraints))
-        logger.debug(jax.tree_map(lambda x: str_tensor(x), constraint_ips))
-        logger.debug(str_tensor(constraint_fs))
+        return x_batch
 
-        return x_batch, constraints, constraint_fs, constraint_ips
-
-    def _get_update_inputs(self, i, active, all_params, all_opt_states, x_batch_global, constraints_global, constraint_fs_global, constraint_offsets_global, decomposition, problem):
+    def _get_update_inputs(self, i, active, all_params, all_opt_states, x_batch_global, decomposition):
         "Get inputs to the FBPINN update step based on active models"
 
         start0 = time.time()
@@ -562,16 +524,16 @@ class FBPINNTrainer(_Trainer):
         assert jnp.isin(active, jnp.array([0,1,2])).all()
         assert active.shape == (all_params["static"]["decomposition"]["m"],)
 
-        # get x_batch / constraints inputs from x_batch_global based on active
-        x_batch, constraints, constraint_fs, constraint_ips = self._get_x_batch(i, active, all_params, x_batch_global, constraints_global, constraint_fs_global, constraint_offsets_global, decomposition)
+        # get x_batch from x_batch_global based on active
+        x_batch = self._get_x_batch(i, active, all_params, x_batch_global, decomposition)
 
         # get model takes / scheduler cuts given x_batch and active
         takes, _, (active, cut_active, cut_fixed, cut_all, merge_active) = get_inputs(x_batch, active, all_params, decomposition)
 
         # cut params / opt states (schedule)
-        active_params = cut_active(all_params["trainable"])
-        fixed_params = cut_fixed(all_params["trainable"])
-        static_params = cut_all(all_params["static"])
+        active_params = cut_active(all_params["trainable"]) # cut active params
+        fixed_params = cut_fixed(all_params["trainable"])   # cut fixed params
+        static_params = cut_all(all_params["static"])       # cut active/fixed params
         active_opt_states = tree_map_dicts(cut_active, all_opt_states)# because all_opt_states has more complex structure
         logger.debug("active_params")
         logger.debug(jax.tree_map(lambda x: str_tensor(x), active_params))
@@ -582,41 +544,9 @@ class FBPINNTrainer(_Trainer):
         logger.debug("active_opt_states")
         logger.debug(jax.tree_map(lambda x: str_tensor(x), active_opt_states))
 
-        # split takes into many using constraint_ips (multiple constraints)
-        # choice 1: use serial constraints - to stop too many gradients
-        # choice 2: combine constraints into joint params/x_batch - 1) for single inside computation 2) needed for joint loss (shared params)
-        (m_take, n_take, p_take, np_take, npou) = takes
-        takess = []
-        iu_ = jnp.arange(np_take.shape[0])
-        for f, ips in zip(constraint_fs.T, constraint_ips):
-
-            f1 = f# cut x_batch
-            f2 = f[np_take]# cut unique point-pou
-
-            #ips = ix_[f1] cut x_batch index (already done above)
-            ius = iu_[f2]# cut unique point-pou index
-
-            f3 = f1[n_take]# cut n_take
-            f4 = f2[p_take]# cut p_take
-
-            # re-index takes based on cuts
-            inv = jnp.zeros(x_batch.shape[0], dtype=int)
-            inv = inv.at[ips].set(jnp.arange(len(ips)))
-
-            inv2 = jnp.zeros(np_take.shape[0], dtype=int)
-            inv2 = inv2.at[ius].set(jnp.arange(len(ius)))
-
-            m_take_ic = m_take[f3]# not necessary to re-index as params are not cut per constraint
-            n_take_ic = inv[n_take[f3]]
-
-            p_take_ic = inv2[p_take[f4]]
-            np_take_ic = inv[np_take[f2]]
-
-            takess.append((m_take_ic, n_take_ic, p_take_ic, np_take_ic, npou))
-
         logger.info(f"[i: {i}/{self.c.n_steps}] Updating active inputs done ({time.time()-start0:.2f} s)")
 
-        return active, merge_active, active_opt_states, active_params, fixed_params, static_params, takess, constraints, x_batch
+        return active, merge_active, active_opt_states, active_params, fixed_params, static_params, takes, x_batch
 
     def train(self):
         "Train model"
@@ -767,55 +697,6 @@ class FBPINNTrainer(_Trainer):
                 report_time += time.time()-start2
 
         return u_test_losses, start1, report_time
-
-    def _test(self, x_batch_test, u_exact, u_test_losses, x_batch, test_inputs, i, pstep, fstep, start0, active, all_params, model_fns, problem, decomposition):
-        "Test step"
-
-        c, writer = self.c, self.writer
-        n_test = c.n_test
-
-        # get FBPINN solution using test data
-        takes, all_ims, cut_all = test_inputs
-        all_params_cut = {"static":cut_all(all_params["static"]),
-                          "trainable":cut_all(all_params["trainable"])}
-        u_test, wp_test_, us_test_, ws_test_, us_raw_test_ = FBPINN_model_jit(all_params_cut, x_batch_test, takes, model_fns, verbose=False)
-        if all_params["static"]["problem"]["dims"][1] == 1:# 1D plots require full lines, not just hist stats
-
-            m, ud, n = all_params["static"]["decomposition"]["m"], all_params["static"]["problem"]["dims"][0], x_batch_test.shape[0]
-
-            us_test = jnp.full((m, n, ud), jnp.nan)
-            us_test = us_test.at[all_ims[takes[0]], takes[1], :].set(us_test_)
-
-            ws_test = jnp.full((m, n, 1), jnp.nan)
-            ws_test = ws_test.at[all_ims[takes[0]], takes[1], :].set(ws_test_)
-
-            us_raw_test = jnp.full((m, n, ud), jnp.nan)
-            us_raw_test = us_raw_test.at[all_ims[takes[0]], takes[1], :].set(us_raw_test_)
-
-            # apply POU
-            us_test = us_test.at[all_ims[takes[0]], takes[1], :].divide(wp_test_[takes[2]])/takes[4]
-            ws_test = ws_test.at[all_ims[takes[0]], takes[1], :].divide(wp_test_[takes[2]])/takes[4]
-
-            # apply constraining operator
-            us_test = vmap(model_fns[-1], in_axes=(None,None,0))(all_params, x_batch_test, us_test)
-
-        else:
-            us_test, ws_test, us_raw_test = us_test_, ws_test_, us_raw_test_
-
-        # get losses over test data
-        l1 = jnp.mean(jnp.abs(u_exact-u_test)).item()
-        l1n = l1 / u_exact.std().item()
-        u_test_losses.append([i, pstep, fstep, time.time()-start0, l1, l1n])
-        writer.add_scalar("loss/test/l1_istep", l1, i)
-
-        # create figures
-        if i % (c.test_freq * 5) == 0:
-            fs = DIC_plot_trainer.plot("FBPINN", all_params["static"]["problem"]["dims"],
-                x_batch_test, u_exact, u_test, us_test, ws_test, us_raw_test, x_batch, all_params, i, active, decomposition, n_test)
-            if fs is not None:
-                self._save_figs(i, fs)
-
-        return u_test_losses
     
 
 class PINNTrainer(_Trainer):
@@ -959,27 +840,3 @@ class PINNTrainer(_Trainer):
                 report_time += time.time()-start2
 
         return u_test_losses, start1, report_time
-
-    def _test(self, x_batch_test, u_exact, u_test_losses, x_batch, i, pstep, fstep, start0, all_params, model_fns, problem):
-        "Test step"
-
-        c, writer = self.c, self.writer
-        n_test = c.n_test
-
-        # get PINN solution using test data
-        u_test, u_raw_test = PINN_model_jit(all_params, x_batch_test, model_fns, verbose=False)
-
-        # get losses over test data
-        l1 = jnp.mean(jnp.abs(u_exact-u_test)).item()
-        l1n = l1 / u_exact.std().item()
-        u_test_losses.append([i, pstep, fstep, time.time()-start0, l1, l1n])
-        writer.add_scalar("loss/test/l1_istep", l1, i)
-
-        # create figures
-        if i % (c.test_freq * 5) == 0:
-            fs = DIC_plot_trainer.plot("PINN", all_params["static"]["problem"]["dims"],
-                x_batch_test, u_exact, u_test, u_raw_test, x_batch, all_params, i, n_test)
-            if fs is not None:
-                self._save_figs(i, fs)
-
-        return u_test_losses
