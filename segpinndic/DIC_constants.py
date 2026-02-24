@@ -1,4 +1,4 @@
-from segpinndic.DIC_importlib import pickle, np, optax, socket
+from segpinndic.DIC_importlib import pickle, np, optax, socket, seed
 from segpinndic.utils import io
 
 from segpinndic import DIC_domains, DIC_decompositions, DIC_networks, DIC_schedulers
@@ -120,7 +120,7 @@ class Constants(ConstantsBase):
         self.optimiser_kwargs = dict(
             learning_rate=getattr(DICconfig, "adam_lr", 1e-3)
             )
-        self.seed = 0
+        self.seed = seed
 
         # Define summary output parameters
         self.summary_freq = getattr(DICconfig, "summary_freq", 1000)        # outputs train stats to command line
