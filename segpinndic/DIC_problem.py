@@ -69,7 +69,7 @@ class DIC_MSE(Problem):
     def loss_fn(all_params, x_batch, constraints):
         ref_img = all_params["static"]["problem"]["ref_img"]
         QKBQKT_def = all_params["static"]["problem"]["QKBQKT_def"]
-        _, u, v = constraints[0]
+        u, v = constraints
 
         xref, yref = x_batch[:,0], x_batch[:,1]
         xs, ys = xref + u, yref + v

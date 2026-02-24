@@ -295,7 +295,7 @@ def jacfwd(f, v):
         return j, aux
     return jacfun
 
-def FBPINN_loss(active_params, fixed_params, static_params, takes, x_batch, model_fns, loss_fn):
+def FBPINN_loss(active_params, fixed_params, static_params, takes, constraints, model_fns, loss_fn):
 
     # add fixed params to active, recombine all_params
     d, da = active_params, fixed_params
@@ -311,16 +311,16 @@ def FBPINN_loss(active_params, fixed_params, static_params, takes, x_batch, mode
             for cl_k in d
         }
     all_params = {"static":static_params, "trainable":trainable_params}
-
+    x_batch = constraints[0][0]
     # run FBPINN 
     u = FBPINN_forward(all_params, x_batch, takes, model_fns)
     return loss_fn(all_params, x_batch, u)
 
-def PINN_loss(active_params, static_params, x_batch, model_fns, loss_fn):
+def PINN_loss(active_params, static_params, constraints, model_fns, loss_fn):
 
     # recombine all_params
     all_params = {"static":static_params, "trainable":active_params}
-
+    x_batch = constraints[0][0]
     # run PINN 
     u = PINN_forward(all_params, x_batch, model_fns)
     return loss_fn(all_params, x_batch, u)
@@ -328,12 +328,12 @@ def PINN_loss(active_params, static_params, x_batch, model_fns, loss_fn):
 @partial(jit, static_argnums=(0, 5, 8, 9, 10))
 def FBPINN_update(optimiser_fn, active_opt_states,
                   active_params, fixed_params, static_params_dynamic, static_params_static,
-                  takes, x_batch, model_fns, loss_fn):
+                  takes, constraints, model_fns, loss_fn):
     # recombine static params
     static_params = combine(static_params_dynamic, static_params_static)
     # update step
     lossval, grads = value_and_grad(FBPINN_loss, argnums=0)(
-        active_params, fixed_params, static_params, takes, x_batch, model_fns, loss_fn)
+        active_params, fixed_params, static_params, takes, constraints, model_fns, loss_fn)
     updates, active_opt_states = optimiser_fn(grads, active_opt_states, active_params)
     active_params = optax.apply_updates(active_params, updates)
     return lossval, active_opt_states, active_params
@@ -341,33 +341,36 @@ def FBPINN_update(optimiser_fn, active_opt_states,
 @partial(jit, static_argnums=(0, 4, 6, 7, 8))
 def PINN_update(optimiser_fn, active_opt_states,
                 active_params, static_params_dynamic, static_params_static,
-                x_batch, model_fns, loss_fn):
+                constraints, model_fns, loss_fn):
     # recombine static params
     static_params = combine(static_params_dynamic, static_params_static)
     # update step
     lossval, grads = value_and_grad(PINN_loss, argnums=0)(
-        active_params, static_params, x_batch, model_fns, loss_fn)
+        active_params, static_params, constraints, model_fns, loss_fn)
     updates, active_opt_states = optimiser_fn(grads, active_opt_states, active_params)
     active_params = optax.apply_updates(active_params, updates)
     return lossval, active_opt_states, active_params
 
 
 # For fast test inference only
-@partial(jax.jit, static_argnums=(1,4,5))
-def _FBPINN_model_jit(all_params_dynamic, all_params_static, x_batch, takes, model_fns, verbose):
-    all_params = combine(all_params_dynamic, all_params_static)
-    return FBPINN_model(all_params, x_batch, takes, model_fns, verbose)
-def FBPINN_model_jit(all_params, x_batch, takes, model_fns, verbose=True):
-    all_params_dynamic, all_params_static = partition(all_params)
-    return _FBPINN_model_jit(all_params_dynamic, all_params_static, x_batch, takes, model_fns, verbose)
 
-@partial(jax.jit, static_argnums=(1,3,4))
-def _PINN_model_jit(all_params_dynamic, all_params_static, x_batch, model_fns, verbose):
-    all_params = combine(all_params_dynamic, all_params_static)
-    return PINN_model(all_params, x_batch, model_fns, verbose)
-def PINN_model_jit(all_params, x_batch, model_fns, verbose=True):
-    all_params_dynamic, all_params_static = partition(all_params)
-    return _PINN_model_jit(all_params_dynamic, all_params_static, x_batch, model_fns, verbose)
+'''用上面的predict forward'''
+
+# @partial(jax.jit, static_argnums=(1,4,5))
+# def _FBPINN_model_jit(all_params_dynamic, all_params_static, x_batch, takes, model_fns, verbose):
+#     all_params = combine(all_params_dynamic, all_params_static)
+#     return FBPINN_model(all_params, x_batch, takes, model_fns, verbose)
+# def FBPINN_model_jit(all_params, x_batch, takes, model_fns, verbose=True):
+#     all_params_dynamic, all_params_static = partition(all_params)
+#     return _FBPINN_model_jit(all_params_dynamic, all_params_static, x_batch, takes, model_fns, verbose)
+
+# @partial(jax.jit, static_argnums=(1,3,4))
+# def _PINN_model_jit(all_params_dynamic, all_params_static, x_batch, model_fns, verbose):
+#     all_params = combine(all_params_dynamic, all_params_static)
+#     return PINN_model(all_params, x_batch, model_fns, verbose)
+# def PINN_model_jit(all_params, x_batch, model_fns, verbose=True):
+#     all_params_dynamic, all_params_static = partition(all_params)
+#     return _PINN_model_jit(all_params_dynamic, all_params_static, x_batch, model_fns, verbose)
 
 
 def get_inputs(x_batch, active, all_params, decomposition):
