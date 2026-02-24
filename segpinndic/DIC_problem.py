@@ -25,17 +25,12 @@ class Problem:
         raise NotImplementedError
 
     @staticmethod
-    def sample_constraints(all_params, domain, key, sampler, batch_shapes):
+    def sample_constraints(all_params, domain):
         """Samples all constraints.
         Returns [[x_batch, *any_constraining_values, required_ujs], ...]. Each list element contains
         the x_batch points and any constraining values passed to the loss function, and the required
         solution and gradient components required in the loss function, for each constraint."""
         raise NotImplementedError
-
-    @staticmethod
-    def constraining_fn(all_params, x_batch, u):
-        """Applies optional constraining operator"""
-        return u
 
     @staticmethod
     def loss_fn(all_params, constraints):
@@ -49,6 +44,7 @@ class DIC_MSE(Problem):
     @staticmethod
     def init_params(ref_img, QKBQKT_def, mask):
         static_params = {
+            "dims":(2,2),
             "QKBQKT_def": QKBQKT_def,
             "ref_img": ref_img,
             "mask": mask,
