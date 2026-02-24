@@ -339,12 +339,12 @@ def FBPINN_update(optimiser_fn, active_opt_states,
 @partial(jit, static_argnums=(0, 4, 6, 7, 8))
 def PINN_update(optimiser_fn, active_opt_states,
                 active_params, static_params_dynamic, static_params_static,
-                constraints, model_fns, loss_fn):
+                x_batch, model_fns, loss_fn):
     # recombine static params
     static_params = combine(static_params_dynamic, static_params_static)
     # update step
     lossval, grads = value_and_grad(PINN_loss, argnums=0)(
-        active_params, static_params, constraints, model_fns, loss_fn)
+        active_params, static_params, x_batch, model_fns, loss_fn)
     updates, active_opt_states = optimiser_fn(grads, active_opt_states, active_params)
     active_params = optax.apply_updates(active_params, updates)
     return lossval, active_opt_states, active_params
