@@ -295,7 +295,7 @@ def jacfwd(f, v):
         return j, aux
     return jacfun
 
-def FBPINN_loss(active_params, fixed_params, static_params, takes, constraints, model_fns, loss_fn):
+def FBPINN_loss(active_params, fixed_params, static_params, takes, x_batch, model_fns, loss_fn):
 
     # add fixed params to active, recombine all_params
     d, da = active_params, fixed_params
@@ -311,7 +311,6 @@ def FBPINN_loss(active_params, fixed_params, static_params, takes, constraints, 
             for cl_k in d
         }
     all_params = {"static":static_params, "trainable":trainable_params}
-    x_batch = constraints[0][0]
     # run FBPINN 
     u = FBPINN_forward(all_params, x_batch, takes, model_fns)
     return loss_fn(all_params, x_batch, u)
@@ -328,12 +327,12 @@ def PINN_loss(active_params, static_params, constraints, model_fns, loss_fn):
 @partial(jit, static_argnums=(0, 5, 8, 9, 10))
 def FBPINN_update(optimiser_fn, active_opt_states,
                   active_params, fixed_params, static_params_dynamic, static_params_static,
-                  takes, constraints, model_fns, loss_fn):
+                  takes, x_batch, model_fns, loss_fn):
     # recombine static params
     static_params = combine(static_params_dynamic, static_params_static)
     # update step
     lossval, grads = value_and_grad(FBPINN_loss, argnums=0)(
-        active_params, fixed_params, static_params, takes, constraints, model_fns, loss_fn)
+        active_params, fixed_params, static_params, takes, x_batch, model_fns, loss_fn)
     updates, active_opt_states = optimiser_fn(grads, active_opt_states, active_params)
     active_params = optax.apply_updates(active_params, updates)
     return lossval, active_opt_states, active_params
@@ -580,24 +579,17 @@ class FBPINNTrainer(_Trainer):
         if ps_[1]: all_params["trainable"]["network"] = {"subdomain": ps_[1]}# add subdomain key
         logger.debug("all_params")
         logger.debug(jax.tree_map(lambda x: str_tensor(x), all_params))
-        model_fns = (decomposition.norm_fn, network.network_fn, decomposition.unnorm_fn, decomposition.window_fn, problem.constraining_fn)
+        model_fns = (decomposition.norm_fn, network.network_fn, decomposition.unnorm_fn, decomposition.window_fn)
 
         # initialise scheduler
         scheduler = c.scheduler(all_params=all_params, n_steps=c.n_steps, **c.scheduler_kwargs)
 
         # common initialisation
         (optimiser, all_opt_states, optimiser_fn, loss_fn, key,
-        constraints_global, x_batch_global, constraint_offsets_global, constraint_fs_global, jmapss,
-        x_batch_test, u_exact) = _common_train_initialisation(c, key, all_params, problem, domain)
-
-        # fix test data inputs
-        logger.info("Getting test data inputs..")
-        active_test_ = jnp.ones(all_params["static"]["decomposition"]["m"], dtype=int)
-        takes_, all_ims_, (_, _, _, cut_all_, _)  = get_inputs(x_batch_test, active_test_, all_params, decomposition)
-        test_inputs = (takes_, all_ims_, cut_all_)
+        x_batch_global, jmaps) = _common_train_initialisation(c, key, all_params, problem, domain)
 
         # train loop
-        pstep, fstep, u_test_losses = 0, 0, []
+        pstep, fstep = 0, 0 # Cumulative training parameter size, Cumulative FLOPs (floating-point operations)
         start0, start1, report_time = time.time(), time.time(), 0.
         merge_active, active_params, active_opt_states, fixed_params = None, None, None, None
         lossval = None
@@ -613,16 +605,16 @@ class FBPINNTrainer(_Trainer):
                     all_opt_states = tree_map_dicts(merge_active, active_opt_states, all_opt_states)
 
                 # then get new inputs to update step
-                active, merge_active, active_opt_states, active_params, fixed_params, static_params, takess, constraints, x_batch = \
-                     self._get_update_inputs(i, active, all_params, all_opt_states, x_batch_global, constraints_global, constraint_fs_global, constraint_offsets_global, decomposition, problem)
-
+                active, merge_active, active_opt_states, active_params, fixed_params, static_params, takes, x_batch = \
+                     self._get_update_inputs(i, active, all_params, all_opt_states, x_batch_global, decomposition)
+                
                 # AOT compile update function
                 startc = time.time()
                 logger.info(f"[i: {i}/{self.c.n_steps}] Compiling update step..")
                 static_params_dynamic, static_params_static = partition(static_params)
                 update = FBPINN_update.lower(optimiser_fn, active_opt_states,
                                              active_params, fixed_params, static_params_dynamic, static_params_static,
-                                             takess, constraints, model_fns, jmapss, loss_fn).compile()
+                                             takes, x_batch, model_fns, loss_fn).compile()
                 logger.info(f"[i: {i}/{self.c.n_steps}] Compiling done ({time.time()-startc:.2f} s)")
                 cost_ = update.cost_analysis()
                 p,f = total_size(active_params["network"]), cost_[0]["flops"] if (cost_ and "flops" in cost_[0]) else 0
@@ -661,7 +653,7 @@ class FBPINNTrainer(_Trainer):
         return all_params
 
     def _report(self, i, pstep, fstep, u_test_losses, start0, start1, report_time,
-                u_exact, x_batch_test, test_inputs, all_params, all_opt_states, model_fns, problem, decomposition,
+                all_params, all_opt_states, model_fns, problem, decomposition,
                 active, merge_active, active_opt_states, active_params, x_batch,
                 lossval):
         "Report results"
@@ -669,7 +661,7 @@ class FBPINNTrainer(_Trainer):
         c = self.c
         summary_,test_,model_save_ = [(i % f == 0) for f in
                                       [c.summary_freq, c.test_freq, c.model_save_freq]]
-        if summary_ or test_ or model_save_:
+        if summary_ or model_save_:
 
             # print summary
             if i != 0 and summary_:
@@ -677,7 +669,7 @@ class FBPINNTrainer(_Trainer):
                 self._print_summary(i, lossval.item(), rate, start0)
                 start1, report_time = time.time(), 0.
 
-            if test_ or model_save_:
+            if model_save_:
 
                 start2 = time.time()
 
@@ -685,18 +677,13 @@ class FBPINNTrainer(_Trainer):
                 all_params["trainable"] = merge_active(active_params, all_params["trainable"])
                 all_opt_states = tree_map_dicts(merge_active, active_opt_states, all_opt_states)
 
-                # take test step
-                if test_:
-                    u_test_losses = self._test(
-                        x_batch_test, u_exact, u_test_losses, x_batch, test_inputs, i, pstep, fstep, start0, active, all_params, model_fns, problem, decomposition)
-
                 # save model
                 if model_save_:
-                    self._save_model(i, (i, all_params, all_opt_states, active, jnp.array(u_test_losses)))
+                    self._save_model(i, (i, all_params, all_opt_states, active, jnp.array(lossval.item())))
 
                 report_time += time.time()-start2
 
-        return u_test_losses, start1, report_time
+        return lossval.item(), start1, report_time
     
 
 class PINNTrainer(_Trainer):
