@@ -49,4 +49,5 @@ def seed_everything(seed_value: int):
     key = jax.random.PRNGKey(seed_value)
     return key
 
-key = seed_everything(42)
+seed = 42
+seed_everything(seed)
