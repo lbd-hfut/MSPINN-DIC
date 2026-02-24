@@ -315,11 +315,10 @@ def FBPINN_loss(active_params, fixed_params, static_params, takes, x_batch, mode
     u = FBPINN_forward(all_params, x_batch, takes, model_fns)
     return loss_fn(all_params, x_batch, u)
 
-def PINN_loss(active_params, static_params, constraints, model_fns, loss_fn):
+def PINN_loss(active_params, static_params, x_batch, model_fns, loss_fn):
 
     # recombine all_params
     all_params = {"static":static_params, "trainable":active_params}
-    x_batch = constraints[0][0]
     # run PINN 
     u = PINN_forward(all_params, x_batch, model_fns)
     return loss_fn(all_params, x_batch, u)
@@ -623,23 +622,23 @@ class FBPINNTrainer(_Trainer):
 
             # report initial model
             if i == 0:
-                u_test_losses, start1, report_time = \
-                self._report(i, pstep, fstep, u_test_losses, start0, start1, report_time,
-                            u_exact, x_batch_test, test_inputs, all_params, all_opt_states, model_fns, problem, decomposition,
-                            active, merge_active, active_opt_states, active_params, x_batch,
+                lossval, start1, report_time = \
+                self._report(i, start0, start1, report_time,
+                            all_params, all_opt_states,
+                            active, merge_active, active_opt_states, active_params,
                             lossval)
 
             # take a training step
             lossval, active_opt_states, active_params = update(active_opt_states,
                                          active_params, fixed_params, static_params_dynamic,
-                                         takess, constraints)# note compiled function only accepts dynamic arguments
+                                         takes, x_batch)# note compiled function only accepts dynamic arguments
             pstep, fstep = pstep+p, fstep+f
 
             # report
-            u_test_losses, start1, report_time = \
-            self._report(i + 1, pstep, fstep, u_test_losses, start0, start1, report_time,
-                        u_exact, x_batch_test, test_inputs, all_params, all_opt_states, model_fns, problem, decomposition,
-                        active, merge_active, active_opt_states, active_params, x_batch,
+            lossval, start1, report_time = \
+            self._report(i + 1, start0, start1, report_time,
+                        all_params, all_opt_states,
+                        active, merge_active, active_opt_states, active_params,
                         lossval)
 
         # cleanup
@@ -652,9 +651,9 @@ class FBPINNTrainer(_Trainer):
 
         return all_params
 
-    def _report(self, i, pstep, fstep, u_test_losses, start0, start1, report_time,
-                all_params, all_opt_states, model_fns, problem, decomposition,
-                active, merge_active, active_opt_states, active_params, x_batch,
+    def _report(self, i, start0, start1, report_time,
+                all_params, all_opt_states,
+                active, merge_active, active_opt_states, active_params,
                 lossval):
         "Report results"
 
