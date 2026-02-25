@@ -726,23 +726,21 @@ class PINNTrainer(_Trainer):
 
         # common initialisation
         (optimiser, all_opt_states, optimiser_fn, loss_fn, key,
-        constraints_global, x_batch_global, _, _, jmapss,
-        x_batch_test, u_exact) = _common_train_initialisation(c, key, all_params, problem, domain)
+        x_batch_global, jmaps) = _common_train_initialisation(c, key, all_params, problem, domain)
 
         # get implicit jitted update function
         active_params = all_params["trainable"]
         static_params = all_params["static"]
         active_opt_states = all_opt_states
         x_batch = x_batch_global
-        constraints = constraints_global
 
         # AOT compile update function
         startc = time.time()
         logger.info(f"[i: {0}/{self.c.n_steps}] Compiling update step..")
-        static_params_dynamic, static_params_static = partition(static_params)
+        static_params_dynamic, static_params_static = partition(static_params) # 图像和预处理那里需要处理一下
         update = PINN_update.lower(optimiser_fn, active_opt_states,
                                    active_params, static_params_dynamic, static_params_static,
-                                   constraints, model_fns, jmapss, loss_fn).compile()
+                                   x_batch, model_fns, loss_fn).compile()
         logger.info(f"[i: {0}/{self.c.n_steps}] Compiling done ({time.time()-startc:.2f} s)")
         cost_ = update.cost_analysis()
         p,f = total_size(active_params["network"]), cost_[0]["flops"] if (cost_ and "flops" in cost_[0]) else 0
@@ -750,32 +748,30 @@ class PINNTrainer(_Trainer):
         logger.debug((p,f))
 
         # train loop
-        pstep, fstep, u_test_losses = 0, 0, []
+        pstep, fstep = 0, 0
         start0, start1, report_time = time.time(), time.time(), 0.
         lossval = None
         for i in range(c.n_steps):
 
             if i == 0:
                 # report initial model
-                u_test_losses, start1, report_time = \
-                self._report(i, pstep, fstep, u_test_losses, start0, start1, report_time,
-                            u_exact, x_batch_test, all_params, all_opt_states, model_fns, problem,
+                lossval, start1, report_time = \
+                self._report(i, start0, start1, report_time,
+                            all_params, all_opt_states,
                             active_opt_states, active_params,
-                            x_batch,
                             lossval)
 
             # take a training step
             lossval, active_opt_states, active_params = update(active_opt_states,
                                        active_params, static_params_dynamic,
-                                       constraints)# note compiled function only accepts dynamic arguments
+                                       x_batch)# note compiled function only accepts dynamic arguments
             pstep, fstep = pstep+p, fstep+f
 
             # report
-            u_test_losses, start1, report_time = \
-            self._report(i + 1, pstep, fstep, u_test_losses, start0, start1, report_time,
-                        u_exact, x_batch_test, all_params, all_opt_states, model_fns, problem,
+            lossval, start1, report_time = \
+            self._report(i + 1, start0, start1, report_time,
+                        all_params, all_opt_states,
                         active_opt_states, active_params,
-                        x_batch,
                         lossval)
 
         # cleanup
@@ -788,10 +784,9 @@ class PINNTrainer(_Trainer):
 
         return all_params
 
-    def _report(self, i, pstep, fstep, u_test_losses, start0, start1, report_time,
-                u_exact, x_batch_test, all_params, all_opt_states, model_fns, problem,
+    def _report(self, i, start0, start1, report_time,
+                all_params, all_opt_states,
                 active_opt_states, active_params,
-                x_batch,
                 lossval):
         "Report results"
 
@@ -806,7 +801,7 @@ class PINNTrainer(_Trainer):
                 self._print_summary(i, lossval.item(), rate, start0)
                 start1, report_time = time.time(), 0.
 
-            if test_ or model_save_:
+            if model_save_:
 
                 start2 = time.time()
 
@@ -814,15 +809,10 @@ class PINNTrainer(_Trainer):
                 all_params["trainable"] = active_params
                 all_opt_states = active_opt_states
 
-                # take test step
-                if test_:
-                    u_test_losses = self._test(
-                        x_batch_test, u_exact, u_test_losses, x_batch, i, pstep, fstep, start0, all_params, model_fns, problem)
-
                 # save model
                 if model_save_:
-                    self._save_model(i, (i, all_params, all_opt_states, jnp.array(u_test_losses)))
+                    self._save_model(i, (i, all_params, all_opt_states, jnp.array(lossval.item())))
 
                 report_time += time.time()-start2
 
-        return u_test_losses, start1, report_time
+        return lossval.item(), start1, report_time
