@@ -93,10 +93,19 @@ class Constants(ConstantsBase):
             ]
         subdomain_ws = get_subdomain_ws(subdomain_xs, 1.4)
         self.decomposition = DIC_decompositions.RectangularDecompositionND
+        mu = np.array([
+            (xmin_roi + xmax_roi) / 2,
+            (ymin_roi + ymax_roi) / 2
+        ])
+
+        sd = np.array([
+            (xmax_roi - xmin_roi) / 2,
+            (ymax_roi - ymin_roi) / 2
+        ])
         self.decomposition_init_kwargs = dict(
             subdomain_xs=subdomain_xs,
             subdomain_ws=subdomain_ws,
-            unnorm=(-1., 1.),
+            unnorm=(mu, sd),
             )
 
         # Define neural network
