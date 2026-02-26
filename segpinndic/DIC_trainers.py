@@ -10,7 +10,7 @@ from segpinndic import DIC_networks, DIC_plot_trainer
 class _Trainer:
     "Generic model trainer class"
 
-    def __init__(self, c):
+    def __init__(self, c, writer):
         "Initialise device and output directories"
 
         # clear directories
@@ -18,8 +18,8 @@ class _Trainer:
         c.save_constants_file()
         # logger.info(c)
 
-        # initialise summary writer
-        writer = SummaryWriter(c.summary_out_dir)
+        # # initialise summary writer
+        # writer = SummaryWriter(c.summary_out_dir)
         writer.add_text("constants", str(c).replace("\n","  \n"))# uses markdown
 
         self.c, self.writer = c, writer
