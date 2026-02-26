@@ -15,6 +15,7 @@ class BufferManager:
     defImg_pad = None
     mask = None
     mask_pad = None
+    scale_uv = None
 
 def plus_power(x, p):
     return jnp.where(x > 0, x ** p, 0.0)
