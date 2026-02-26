@@ -10,8 +10,8 @@ from segpinndic.DIC_trainers import FBPINNTrainer
 from segpinndic import DIC_networks
 
 def main(
-    seed_config_path="../config/Seed_Configuration.txt",
-    dic_config_path="../config/PINN-DIC-2D.txt"
+    seed_config_path="./config/Seed_Configuration.txt",
+    dic_config_path="./config/PINN-DIC-2D.txt"
     ):
     
     DIC_config = DIC_config_txt(dic_config_path)
@@ -31,3 +31,7 @@ def main(
                 BufferManager.defImg*255,
                 seed_pos, seed_uv, DIC_config.output_dir, 'seed', i+1
             )
+            
+            
+if __name__ == "__main__":
+    main()
