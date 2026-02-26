@@ -35,7 +35,6 @@ def main(
         constants_list.append(c_)
     
     for i in range(N_pairs):
-        logger.info(f"Processing imgage pair {i+1}/{N_pairs}")
         ImgData.get_image(i)
         seed_pos, seed_uv = SeedCalculator.analyze()
         if DIC_config.save_figures:
@@ -44,12 +43,11 @@ def main(
                 BufferManager.defImg*255,
                 seed_pos, seed_uv, DIC_config.output_dir, f'seed{i+1:03d}', i+1
             )
-        BufferManager.scale_uv = [jnp.asarray(
+        BufferManager.scale_uv = [jnp.asarray((
             (jnp.max(a[:,0]) - jnp.min(a[:,0]))/2,
             (jnp.max(a[:,1]) - jnp.min(a[:,1]))/2,
             (jnp.max(a[:,0]) + jnp.min(a[:,0]))/2,
-            (jnp.max(a[:,1]) + jnp.min(a[:,1]))/2
-            ) for a in seed_uv]
+            (jnp.max(a[:,1]) + jnp.min(a[:,1]))/2)) for a in seed_uv]
         
         for roi_id in range(N_roi):
             logger.info(f"Processing imgage pair {i+1}/{N_pairs} ROI {roi_id+1}/{N_roi}")
