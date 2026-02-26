@@ -28,16 +28,16 @@ def main(
         constants_list.append(c_)
     
     constants_list[0].get_outdirs()
-    constants_list[0].clear_dir()
+    constants_list[0].clear_outdirs()
     writer = SummaryWriter(constants_list[0].summary_out_dir)
     
     if np.prod(tuple(DIC_config.n_subdomains)) == 1:
         logger.info("using PINN solver")
-        writer.add_text("using PINN solver")
+        writer.add_text("solver", "using PINN solver")
         trainer = PINNTrainer
     else:
         logger.info("using FBPPINN solver")
-        writer.add_text("using FBPPINN solver")
+        writer.add_text("solver", "using FBPINN solver")
         trainer = FBPINNTrainer
     
     for i in range(N_pairs):
@@ -57,7 +57,7 @@ def main(
         
         for roi_id in range(N_roi):
             logger.info(f"Processing imgage pair {i+1}/{N_pairs} ROI {roi_id+1}/{N_roi}")
-            writer.add_text(f"Processing imgage pair {i+1}/{N_pairs} ROI {roi_id+1}/{N_roi}")
+            writer.add_text("solver", f"Processing imgage pair {i+1}/{N_pairs} ROI {roi_id+1}/{N_roi}")
             c = constants_list[roi_id]
             run = trainer(c, writer)
         
