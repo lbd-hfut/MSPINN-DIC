@@ -8,7 +8,7 @@
 Sub_pixels
 
 # seeds_number: 种子点数量
-32
+128
 
 # max_workers: 并行计算线程数
 4
