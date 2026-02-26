@@ -12,7 +12,7 @@ import glob
 import pickle
 import optax
 import socket
-from jax import random
+from jax import random, jit, vmap, value_and_grad, jvp
 import jax.numpy as jnp
 from jax import lax
 from jax import vmap
