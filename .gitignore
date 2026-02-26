@@ -211,3 +211,6 @@ __marimo__/
 # case dir
 case/**/*.mat
 case/**/*.png
+case/**/results/models/
+case/**/results/summaries/
+

@@ -719,7 +719,7 @@ def Seed_match_visualization(refImg, defImg, xy, uv, output_dir, basename, idx):
     ax.axis("off")
 
     # Determine save directory
-    result_dir = output_dir
+    result_dir = os.path.join(output_dir, "seed")
     os.makedirs(result_dir, exist_ok=True)
     save_path = os.path.join(result_dir, basename + ".png")
 
