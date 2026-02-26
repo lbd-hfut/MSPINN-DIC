@@ -188,6 +188,6 @@ if __name__ == "__main__":
     from segpinndic.DIC_config import DIC_config_txt
     config = DIC_config_txt("./config/PINN-DIC-2D.txt")
     
-    BufferManager.refImg = np.zeros((100, 200))# dummy image for testing
-    constants = Constants(config)
-    print(constants)
+    # BufferManager.refImg = np.zeros((100, 200))# dummy image for testing
+    # constants = Constants(config)
+    # print(constants)
