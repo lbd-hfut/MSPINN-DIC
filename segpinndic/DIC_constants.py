@@ -53,7 +53,7 @@ class ConstantsBase:
 # main constants class
 class Constants(ConstantsBase):
 
-    def __init__(self, DICconfig, roi):
+    def __init__(self, DICconfig, roi_id):
         "Defines global constants for model"
 
         # Define results directories
@@ -62,6 +62,8 @@ class Constants(ConstantsBase):
         self.run = getattr(DICconfig, "run", "PINN")
         
         # image shape
+        self.roi_id = roi_id
+        roi = BufferManager.mask[roi_id]
         roi = np.asarray(roi)
         assert roi.ndim == 2, "ROI must be (H, W) bool array"
         H, W = roi.shape
