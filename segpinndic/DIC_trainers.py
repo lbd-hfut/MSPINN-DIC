@@ -10,7 +10,7 @@ from segpinndic import DIC_networks, DIC_plot_trainer
 class _Trainer:
     "Generic model trainer class"
 
-    def __init__(self, c, writer):
+    def __init__(self, c):
         "Initialise device and output directories"
 
         # clear directories
