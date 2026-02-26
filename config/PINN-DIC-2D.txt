@@ -6,10 +6,10 @@
 ############################################
 
 # input_dir: 输入图像所在的文件夹路径
-C:/LBD_File_Folder/02Project/Reserch/SegPINN-DIC/case/case9/image
+C:/01project/SegPINN-DIC/case/case9/image
 
 # output_dir: 结果输出文件夹路径
-C:/LBD_File_Folder/02Project/Reserch/SegPINN-DIC/case/case9/results
+C:/01project/SegPINN-DIC/case/case9/results
 
 # run: 项目名称
 PINN_TEST
