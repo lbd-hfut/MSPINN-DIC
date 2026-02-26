@@ -25,6 +25,9 @@ PINN_TEST
 # n_subdomains: 区域分割
 [4,8]
 
+# train_schedulers: 训练方式 ["AllActiveSchedulerND", "PointSchedulerRectangularND", "LineSchedulerRectangularND"]
+AllActiveSchedulerND
+
 # hidden_units: PINN-DIC神经元数目列表
 [32]
 
