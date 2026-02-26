@@ -15,8 +15,8 @@ def main(
     dic_config_path="./config/PINN-DIC-2D.txt"
     ):
     
-    DIC_config = DIC_config_txt(dic_config_path)
-    Seed_config = seed_config_txt(seed_config_path)
+    DIC_config = DIC_config_txt(dic_config_path, verbose=False)
+    Seed_config = seed_config_txt(seed_config_path, verbose=False)
     
     if np.prod(tuple(DIC_config.n_subdomains)) == 1:
         logger.info("using PINN solver")
