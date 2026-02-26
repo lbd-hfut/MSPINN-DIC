@@ -53,7 +53,6 @@ def main(
             logger.info(f"Processing imgage pair {i+1}/{N_pairs} ROI {roi_id+1}/{N_roi}")
             c = constants_list[roi_id]
             run = trainer(c)
-            
         
             
             
