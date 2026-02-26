@@ -25,6 +25,7 @@ def main(
     constants_list = []
     for roi_id in range(N_roi):
         c_ = Constants(DIC_config, roi_id)
+        constants_list.append(c_)
     
     for i in range(N_pairs):
         logger.info(f"Processing imgage pair {i+1}/{N_pairs}")
