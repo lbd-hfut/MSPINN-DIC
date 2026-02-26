@@ -14,12 +14,13 @@ class _Trainer:
         "Initialise device and output directories"
 
         # clear directories
-        # c.get_outdirs()
-        # c.save_constants_file()
+        c.get_outdirs()
+        c.clear_outdirs()
+        c.save_constants_file()
         # logger.info(c)
 
         # # initialise summary writer
-        # writer = SummaryWriter(c.summary_out_dir)
+        writer = SummaryWriter(c.summary_out_dir)
         writer.add_text("constants", str(c).replace("\n","  \n"))# uses markdown
 
         self.c, self.writer = c, writer
