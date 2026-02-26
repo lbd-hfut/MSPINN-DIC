@@ -37,6 +37,8 @@ FCN
 # interpolation: 插值方法 [bspline, bilinear, bicubic]
 bicubic
 
+# loss_fun: 损失函数的选择 ["DIC_MSE", "DIC_ZNCC"]
+
 ############################################
 # 🏋️‍♂️ 训练参数（常调整）
 ############################################
