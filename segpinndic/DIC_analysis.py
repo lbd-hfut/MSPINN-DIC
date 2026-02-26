@@ -29,7 +29,7 @@ def main(
             Seed_match_visualization(
                 BufferManager.refImg*255, 
                 BufferManager.defImg*255,
-                seed_pos, seed_uv, DIC_config.output_dir, 'seed', i+1
+                seed_pos, seed_uv, DIC_config.output_dir, f'seed{i+1:03d}', i+1
             )
             
             
