@@ -14,8 +14,8 @@ class _Trainer:
         "Initialise device and output directories"
 
         # clear directories
-        c.get_outdirs()
-        c.save_constants_file()
+        # c.get_outdirs()
+        # c.save_constants_file()
         # logger.info(c)
 
         # # initialise summary writer
