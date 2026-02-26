@@ -109,13 +109,13 @@ class Constants(ConstantsBase):
         subdomain_ws = get_subdomain_ws(subdomain_xs, 2.4)
         self.decomposition = DIC_decompositions.RectangularDecompositionND
         mu = np.array([
-            (xmin_roi + xmax_roi) / 2,
-            (ymin_roi + ymax_roi) / 2
+            BufferManager.scale_uv[roi_id][0],
+            BufferManager.scale_uv[roi_id][1]
         ])
 
         sd = np.array([
-            (xmax_roi - xmin_roi) / 2,
-            (ymax_roi - ymin_roi) / 2
+            BufferManager.scale_uv[roi_id][2],
+            BufferManager.scale_uv[roi_id][3]
         ])
         self.decomposition_init_kwargs = dict(
             subdomain_xs=subdomain_xs,
