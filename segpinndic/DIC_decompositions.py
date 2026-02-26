@@ -146,7 +146,10 @@ class RectangularDecompositionND(Decomposition):
             flags = np.ones(s)
 
         # get unnorm parameters
-        unnorms = np.concatenate([unnorm[0]*np.ones(s), unnorm[1]*np.ones(s)], axis=1)
+        mu, sd = unnorm
+        mu_N = np.repeat(mu, xmins.shape[0], axis=0)
+        sd_N = np.repeat(sd, xmins.shape[0], axis=0)
+        unnorms = np.stack([mu_N, sd_N], axis=1)   # (N,2,2)
 
         # get pou index
         # important note: each POU MUST cover the entire domain (POU boundary introduces discontinuities)
