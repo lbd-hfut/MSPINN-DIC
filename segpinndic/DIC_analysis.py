@@ -1,4 +1,4 @@
-from segpinndic.DIC_importlib import os, pickle, jax, jnp, np
+from segpinndic.DIC_importlib import os, pickle, jax, jnp, np, SummaryWriter
 
 from segpinndic.DIC_config import seed_config_txt, DIC_config_txt
 from segpinndic.DIC_readImg import BufferManager, ImgDataset
@@ -18,13 +18,6 @@ def main(
     DIC_config = DIC_config_txt(dic_config_path, verbose=False)
     Seed_config = seed_config_txt(seed_config_path, verbose=False)
     
-    if np.prod(tuple(DIC_config.n_subdomains)) == 1:
-        logger.info("using PINN solver")
-        trainer = PINNTrainer
-    else:
-        logger.info("using FBPPINN solver")
-        trainer = FBPINNTrainer
-    
     ImgData = ImgDataset(DIC_config, Seed_config)
     SeedCalculator = CalcSeeds(Seed_config)
     
@@ -36,6 +29,16 @@ def main(
     
     constants_list[0].get_outdirs()
     constants_list[0].clear_dir()
+    writer = SummaryWriter(constants_list[0].summary_out_dir)
+    
+    if np.prod(tuple(DIC_config.n_subdomains)) == 1:
+        logger.info("using PINN solver")
+        writer.add_text("using PINN solver")
+        trainer = PINNTrainer
+    else:
+        logger.info("using FBPPINN solver")
+        writer.add_text("using FBPPINN solver")
+        trainer = FBPINNTrainer
     
     for i in range(N_pairs):
         ImgData.get_image(i)
@@ -54,8 +57,9 @@ def main(
         
         for roi_id in range(N_roi):
             logger.info(f"Processing imgage pair {i+1}/{N_pairs} ROI {roi_id+1}/{N_roi}")
+            writer.add_text(f"Processing imgage pair {i+1}/{N_pairs} ROI {roi_id+1}/{N_roi}")
             c = constants_list[roi_id]
-            run = trainer(c)
+            run = trainer(c, writer)
         
             
             
