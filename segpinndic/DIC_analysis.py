@@ -6,7 +6,7 @@ from segpinndic.DIC_seedcalc import CalcSeeds, Seed_match_visualization
 
 from segpinndic.utils.logger import logger
 from segpinndic.utils.other import DictToObj
-from segpinndic.DIC_trainers import FBPINNTrainer
+from segpinndic.DIC_trainers import FBPINNTrainer, PINNTrainer
 from segpinndic.DIC_constants import Constants
 from segpinndic import DIC_networks
 
@@ -17,6 +17,13 @@ def main(
     
     DIC_config = DIC_config_txt(dic_config_path)
     Seed_config = seed_config_txt(seed_config_path)
+    
+    if np.prod(tuple(DIC_config.n_subdomains)) == 1:
+        logger.info("using PINN solver")
+        trainer = PINNTrainer
+    else:
+        logger.info("using FBPPINN solver")
+        trainer = FBPINNTrainer
     
     ImgData = ImgDataset(DIC_config, Seed_config)
     SeedCalculator = CalcSeeds(Seed_config)
@@ -37,7 +44,17 @@ def main(
                 BufferManager.defImg*255,
                 seed_pos, seed_uv, DIC_config.output_dir, f'seed{i+1:03d}', i+1
             )
+        BufferManager.scale_uv = [jnp.asarray(
+            (jnp.max(a[:,0]) - jnp.min(a[:,0]))/2,
+            (jnp.max(a[:,1]) - jnp.min(a[:,1]))/2,
+            (jnp.max(a[:,0]) + jnp.min(a[:,0]))/2,
+            (jnp.max(a[:,1]) + jnp.min(a[:,1]))/2
+            ) for a in seed_uv]
         
+        for roi_id in range(N_roi):
+            logger.info(f"Processing imgage pair {i+1}/{N_pairs} ROI {roi_id+1}/{N_roi}")
+            c = constants_list[roi_id]
+            run = trainer(c)
         
             
             
