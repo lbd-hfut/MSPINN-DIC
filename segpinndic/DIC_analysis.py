@@ -34,6 +34,9 @@ def main(
         c_ = Constants(DIC_config, roi_id)
         constants_list.append(c_)
     
+    constants_list[0].get_outdirs()
+    constants_list[0].clear_dir()
+    
     for i in range(N_pairs):
         ImgData.get_image(i)
         seed_pos, seed_uv = SeedCalculator.analyze()
