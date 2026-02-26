@@ -323,7 +323,7 @@ def PINN_loss(active_params, static_params, x_batch, model_fns, loss_fn):
     u = PINN_forward(all_params, x_batch, model_fns)
     return loss_fn(all_params, x_batch, u)
 
-@partial(jit, static_argnums=(0, 5, 8, 9, 10))
+@partial(jit, static_argnums=(0))
 def FBPINN_update(optimiser_fn, active_opt_states,
                   active_params, fixed_params, static_params_dynamic, static_params_static,
                   takes, x_batch, model_fns, loss_fn):
@@ -336,7 +336,7 @@ def FBPINN_update(optimiser_fn, active_opt_states,
     active_params = optax.apply_updates(active_params, updates)
     return lossval, active_opt_states, active_params
 
-@partial(jit, static_argnums=(0, 4, 6, 7, 8))
+@partial(jit, static_argnums=(0))
 def PINN_update(optimiser_fn, active_opt_states,
                 active_params, static_params_dynamic, static_params_static,
                 x_batch, model_fns, loss_fn):
