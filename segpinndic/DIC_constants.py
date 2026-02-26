@@ -119,7 +119,10 @@ class Constants(ConstantsBase):
 
         # Define scheduler
         self.n_steps = getattr(DICconfig, "adam_epochs", 15000)
-        self.scheduler = DIC_schedulers.AllActiveSchedulerND
+        scheduler_name = DICconfig.train_schedulers
+        if not hasattr(DIC_schedulers, scheduler_name):
+            raise ValueError(f"Unknown scheduler: {scheduler_name}")
+        self.scheduler = getattr(DIC_schedulers, scheduler_name)
         self.scheduler_kwargs = dict()
 
         # Define optimisation parameters
