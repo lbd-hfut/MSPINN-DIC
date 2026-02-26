@@ -32,11 +32,8 @@ class ConstantsBase:
 
     def get_outdirs(self):
         io.get_dir(self.summary_out_dir)
-        # io.clear_dir(self.summary_out_dir)
         io.get_dir(self.model_out_dir)
-        # io.clear_dir(self.model_out_dir)
         io.get_dir(self.mat_out_dir)
-        # io.clear_dir(self.mat_out_dir)
         
     def clear_outdirs(self):
         io.clear_dir(self.summary_out_dir)
