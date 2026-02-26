@@ -1,7 +1,7 @@
 from segpinndic.DIC_importlib import pickle, np, optax, socket, seed
 from segpinndic.utils import io
 
-from segpinndic import DIC_domains, DIC_decompositions, DIC_networks, DIC_schedulers
+from segpinndic import DIC_domains, DIC_decompositions, DIC_networks, DIC_schedulers, DIC_problem
 from segpinndic.DIC_readImg import BufferManager
 
 class ConstantsBase:
@@ -85,6 +85,17 @@ class Constants(ConstantsBase):
             xmin=np.array([xmin_roi, ymin_roi]),
             xmax=np.array([xmax_roi, ymax_roi]),
             roi=roi
+        )
+        
+        # Define domain
+        loss_name = DICconfig.loss_fun
+        if not hasattr(DIC_problem, loss_name):
+            raise ValueError(f"Unknown network: {loss_name}")
+        self.problem = getattr(DIC_problem, loss_name)
+        self.problem_init_kwargs = dict(
+            ref_img = BufferManager.refImg,
+            QKBQKT_def = BufferManager.QKBQKT_def,
+            mask = roi,
         )
 
         # Define domain decomposition
