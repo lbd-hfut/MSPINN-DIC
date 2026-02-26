@@ -7,6 +7,7 @@ from segpinndic.DIC_seedcalc import CalcSeeds, Seed_match_visualization
 from segpinndic.utils.logger import logger
 from segpinndic.utils.other import DictToObj
 from segpinndic.DIC_trainers import FBPINNTrainer
+from segpinndic.DIC_constants import Constants
 from segpinndic import DIC_networks
 
 def main(
@@ -20,7 +21,11 @@ def main(
     ImgData = ImgDataset(DIC_config, Seed_config)
     SeedCalculator = CalcSeeds(Seed_config)
     
-    N_pairs = len(ImgData)
+    N_pairs, N_roi = len(ImgData), len(BufferManager.mask)
+    constants_list = []
+    for roi_id in range(N_roi):
+        c_ = Constants(DIC_config, roi_id)
+    
     for i in range(N_pairs):
         logger.info(f"Processing imgage pair {i+1}/{N_pairs}")
         ImgData.get_image(i)
@@ -31,6 +36,8 @@ def main(
                 BufferManager.defImg*255,
                 seed_pos, seed_uv, DIC_config.output_dir, f'seed{i+1:03d}', i+1
             )
+        
+        
             
             
 if __name__ == "__main__":
