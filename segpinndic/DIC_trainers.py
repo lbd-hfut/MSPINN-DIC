@@ -54,7 +54,7 @@ class _Trainer:
     def _save_model(self, i, model):
         "Saves a model"
 
-        model = jax.tree_map(lambda x: np.array(x) if isinstance(x, jnp.ndarray) else x, model)# convert jax arrays to np
+        model = jax.tree_util.tree_map(lambda x: np.array(x) if isinstance(x, jnp.ndarray) else x, model)# convert jax arrays to np
         with open(self.c.model_out_dir+f"model_{i:08d}.jax", "wb") as f:
             pickle.dump(model, f)
 
@@ -179,7 +179,7 @@ def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
     all_params_take = {
         t_k: {
             cl_k: {
-                k: jax.tree_map(lambda p:p[m_take], d[t_k][cl_k][k]) if k=="subdomain" else d[t_k][cl_k][k]
+                k: jax.tree_util.tree_map(lambda p:p[m_take], d[t_k][cl_k][k]) if k=="subdomain" else d[t_k][cl_k][k]
                 for k in d[t_k][cl_k]
             }
             for cl_k in d[t_k]
@@ -189,7 +189,7 @@ def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
     f = {
         t_k: {
             cl_k: {
-                k: jax.tree_map(lambda p: 0, d[t_k][cl_k][k]) if k=="subdomain" else jax.tree_map(lambda p: None, d[t_k][cl_k][k])
+                k: jax.tree_util.tree_map(lambda p: 0, d[t_k][cl_k][k]) if k=="subdomain" else jax.tree_map(lambda p: None, d[t_k][cl_k][k])
                 for k in d[t_k][cl_k]
             }
             for cl_k in d[t_k]
@@ -197,9 +197,9 @@ def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
         for t_k in ["static", "trainable"]
     }
     logger.debug("all_params")
-    logger.debug(jax.tree_map(lambda x: str_tensor(x), all_params))
+    logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params))
     logger.debug("all_params_take")
-    logger.debug(jax.tree_map(lambda x: str_tensor(x), all_params_take))
+    logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params_take))
     logger.debug("vmap f")
     logger.debug(f)
 
@@ -302,7 +302,7 @@ def FBPINN_loss(active_params, fixed_params, static_params, takes, x_batch, mode
     d, da = active_params, fixed_params
     trainable_params = {
         cl_k: {
-            k: jax.tree_map(
+            k: jax.tree_util.tree_map(
                     lambda p1, p2:jnp.concatenate([p1,p2],0), 
                     d[cl_k][k], 
                     da[cl_k][k]
@@ -435,17 +435,17 @@ def get_inputs(x_batch, active, all_params, decomposition):
     # cut active and fixed parameter trees
     def cut_active(d):
         "Cuts active_ims from param dict"
-        return {cl_k: {k: jax.tree_map(lambda p:p[active_ims], d[cl_k][k]) if k=="subdomain" else d[cl_k][k]
+        return {cl_k: {k: jax.tree_util.tree_map(lambda p:p[active_ims], d[cl_k][k]) if k=="subdomain" else d[cl_k][k]
                 for k in d[cl_k]}
                 for cl_k in d}
     def cut_fixed(d):
         "Cuts fixed_ims from param dict"
-        return {cl_k: {k: jax.tree_map(lambda p:p[fixed_ims],  d[cl_k][k]) if k=="subdomain" else d[cl_k][k]
+        return {cl_k: {k: jax.tree_util.tree_map(lambda p:p[fixed_ims],  d[cl_k][k]) if k=="subdomain" else d[cl_k][k]
                 for k in d[cl_k]}
                 for cl_k in d}
     def cut_all(d):
         "Cuts all_ims from param dict"
-        return {cl_k: {k: jax.tree_map(lambda p:p[all_ims],    d[cl_k][k]) if k=="subdomain" else d[cl_k][k]
+        return {cl_k: {k: jax.tree_util.tree_map(lambda p:p[all_ims],    d[cl_k][k]) if k=="subdomain" else d[cl_k][k]
                 for k in d[cl_k]}
                 for cl_k in d}
     def merge_active(da, d):
@@ -453,7 +453,7 @@ def get_inputs(x_batch, active, all_params, decomposition):
         for cl_k in d:
             for k in d[cl_k]:
                 if k=="subdomain":
-                    d[cl_k][k] = jax.tree_map(lambda pa, p: p.copy().at[active_ims].set(pa), da[cl_k][k], d[cl_k][k])
+                    d[cl_k][k] = jax.tree_util.tree_map(lambda pa, p: p.copy().at[active_ims].set(pa), da[cl_k][k], d[cl_k][k])
                 else:
                     d[cl_k][k] = da[cl_k][k]
         return d
@@ -472,7 +472,7 @@ def _common_train_initialisation(c, key, all_params, problem, domain):
     optimiser = optax.adam(**c.optimiser_kwargs)
     all_opt_states = optimiser.init(all_params["trainable"])
     logger.debug("all_opt_states")
-    logger.debug(jax.tree_map(lambda x: str_tensor(x), all_opt_states))
+    logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_opt_states))
     optimiser_fn, loss_fn = optimiser.update, problem.loss_fn
 
     # get global constraints (training points)
@@ -535,13 +535,13 @@ class FBPINNTrainer(_Trainer):
         static_params = cut_all(all_params["static"])       # cut active/fixed params
         active_opt_states = tree_map_dicts(cut_active, all_opt_states)# because all_opt_states has more complex structure
         logger.debug("active_params")
-        logger.debug(jax.tree_map(lambda x: str_tensor(x), active_params))
+        logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), active_params))
         logger.debug("fixed_params")
-        logger.debug(jax.tree_map(lambda x: str_tensor(x), fixed_params))
+        logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), fixed_params))
         logger.debug("static_params")
-        logger.debug(jax.tree_map(lambda x: str_tensor(x), static_params))
+        logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), static_params))
         logger.debug("active_opt_states")
-        logger.debug(jax.tree_map(lambda x: str_tensor(x), active_opt_states))
+        logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), active_opt_states))
 
         logger.info(f"[i: {i}/{self.c.n_steps}] Updating active inputs done ({time.time()-start0:.2f} s)")
 
@@ -718,7 +718,7 @@ class PINNTrainer(_Trainer):
         if ps_[0]: all_params["static"]["network"] = ps_[0]
         if ps_[1]: all_params["trainable"]["network"] = {"subdomain": ps_[1]}# add subdomain key
         logger.debug("all_params")
-        logger.debug(jax.tree_map(lambda x: str_tensor(x), all_params))
+        logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params))
 
         # define unnorm function
         mu_, sd_ = c.decomposition_init_kwargs["unnorm"]
