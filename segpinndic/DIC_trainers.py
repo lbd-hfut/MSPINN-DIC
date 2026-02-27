@@ -578,7 +578,7 @@ class FBPINNTrainer(_Trainer):
         if ps_[0]: all_params["static"]["network"] = tree_index(ps_[0],0)# grab first set of static params only
         if ps_[1]: all_params["trainable"]["network"] = {"subdomain": ps_[1]}# add subdomain key
         logger.debug("all_params")
-        logger.debug(jax.tree_map(lambda x: str_tensor(x), all_params))
+        logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params))
         model_fns = (decomposition.norm_fn, network.network_fn, decomposition.unnorm_fn, decomposition.window_fn)
 
         # initialise scheduler
