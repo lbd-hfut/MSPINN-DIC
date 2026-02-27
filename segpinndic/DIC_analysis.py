@@ -52,6 +52,20 @@ def main(
         for roi_id in range(N_roi):
             logger.info(f"Processing imgage pair {i+1}/{N_pairs} ROI {roi_id+1}/{N_roi}")
             c = constants_list[roi_id]
+            mu = np.array([
+                BufferManager.scale_uv[roi_id][0],
+                BufferManager.scale_uv[roi_id][1]
+            ])
+
+            sd = np.array([
+                BufferManager.scale_uv[roi_id][2],
+                BufferManager.scale_uv[roi_id][3]
+            ])
+            c.load_kwargs(decomposition_init_kwargs=dict(
+                subdomain_xs=c.subdomain_xs,
+                subdomain_ws=c.subdomain_ws,
+                unnorm=(mu, sd)
+            ))
             run = trainer(c)
             run.train()
         
