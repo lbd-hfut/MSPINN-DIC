@@ -102,25 +102,25 @@ class Constants(ConstantsBase):
 
         # Define domain decomposition
         nx, ny = getattr(DICconfig, "n_subdomains", [4, 8])
-        subdomain_xs = [
+        self.subdomain_xs = [
             np.linspace(xmin_roi, xmax_roi, nx), 
             np.linspace(ymin_roi, ymax_roi, ny)
             ]
-        subdomain_ws = get_subdomain_ws(subdomain_xs, 2.4)
+        self.subdomain_ws = get_subdomain_ws(self.subdomain_xs, 2.4)
         self.decomposition = DIC_decompositions.RectangularDecompositionND
-        mu = np.array([
-            BufferManager.scale_uv[roi_id][0],
-            BufferManager.scale_uv[roi_id][1]
-        ])
+        # mu = np.array([
+        #     BufferManager.scale_uv[roi_id][0],
+        #     BufferManager.scale_uv[roi_id][1]
+        # ])
 
-        sd = np.array([
-            BufferManager.scale_uv[roi_id][2],
-            BufferManager.scale_uv[roi_id][3]
-        ])
+        # sd = np.array([
+        #     BufferManager.scale_uv[roi_id][2],
+        #     BufferManager.scale_uv[roi_id][3]
+        # ])
         self.decomposition_init_kwargs = dict(
-            subdomain_xs=subdomain_xs,
-            subdomain_ws=subdomain_ws,
-            unnorm=(mu, sd),
+            subdomain_xs=self.subdomain_xs,
+            subdomain_ws=self.subdomain_ws,
+            unnorm=(0, 1),
             )
 
         # Define neural network
