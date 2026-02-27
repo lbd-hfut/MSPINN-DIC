@@ -150,6 +150,7 @@ class RectangularDecompositionND(Decomposition):
         mu_N = np.repeat(mu, xmins.shape[0], axis=0)
         sd_N = np.repeat(sd, xmins.shape[0], axis=0)
         unnorms = np.stack([mu_N, sd_N], axis=1)   # (N,2,2)
+        # unnorms = jnp.expand_dims(unnorms, 2) # (N,2,1,2)
 
         # get pou index
         # important note: each POU MUST cover the entire domain (POU boundary introduces discontinuities)
