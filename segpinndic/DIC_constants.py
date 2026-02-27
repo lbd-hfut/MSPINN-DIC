@@ -85,11 +85,10 @@ class Constants(ConstantsBase):
         self.domain = DIC_domains.RectangularDomainND
         self.domain_init_kwargs = dict(
             xmin=np.array([xmin_roi, ymin_roi]),
-            xmax=np.array([xmax_roi, ymax_roi]),
-            roi=roi
+            xmax=np.array([xmax_roi, ymax_roi])
         )
         
-        # Define domain
+        # Define problem
         loss_name = DICconfig.loss_fun
         if not hasattr(DIC_problem, loss_name):
             raise ValueError(f"Unknown network: {loss_name}")
