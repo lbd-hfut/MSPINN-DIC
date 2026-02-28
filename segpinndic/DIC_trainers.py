@@ -189,7 +189,7 @@ def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
     f = {
         t_k: {
             cl_k: {
-                k: jax.tree_util.tree_map(lambda p: 0, d[t_k][cl_k][k]) if k=="subdomain" else jax.tree_map(lambda p: None, d[t_k][cl_k][k])
+                k: jax.tree_util.tree_map(lambda p: 0, d[t_k][cl_k][k]) if k=="subdomain" else jax.tree_util.tree_map(lambda p: None, d[t_k][cl_k][k])
                 for k in d[t_k][cl_k]
             }
             for cl_k in d[t_k]
@@ -236,11 +236,11 @@ def PINN_model(all_params, x_batch, model_fns, verbose=True):
 
     return u, u_raw
 
-def FBPINN_forward(all_params, x_batch, takes, model_fns, jmaps):
+def FBPINN_forward(all_params, x_batch, takes, model_fns):
     "Computes uv of FBPINN model"
     return FBPINN_model(all_params, x_batch, takes, model_fns)[0]
 
-def PINN_forward(all_params, x_batch, model_fns, jmaps):
+def PINN_forward(all_params, x_batch, model_fns):
     "Computes uv of PINN model"
     return PINN_model(all_params, x_batch, model_fns)[0]
 
