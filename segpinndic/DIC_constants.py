@@ -94,9 +94,9 @@ class Constants(ConstantsBase):
             raise ValueError(f"Unknown network: {loss_name}")
         self.problem = getattr(DIC_problem, loss_name)
         self.problem_init_kwargs = dict(
-            ref_img = BufferManager.refImg,
-            QKBQKT_def = BufferManager.QKBQKT_def,
-            mask = roi,
+            ref_img = None,
+            QKBQKT_def = None,
+            mask = None,
         )
 
         # Define domain decomposition
@@ -107,19 +107,10 @@ class Constants(ConstantsBase):
             ]
         self.subdomain_ws = get_subdomain_ws(self.subdomain_xs, 2.4)
         self.decomposition = DIC_decompositions.RectangularDecompositionND
-        # mu = np.array([
-        #     BufferManager.scale_uv[roi_id][0],
-        #     BufferManager.scale_uv[roi_id][1]
-        # ])
-
-        # sd = np.array([
-        #     BufferManager.scale_uv[roi_id][2],
-        #     BufferManager.scale_uv[roi_id][3]
-        # ])
         self.decomposition_init_kwargs = dict(
             subdomain_xs=self.subdomain_xs,
             subdomain_ws=self.subdomain_ws,
-            unnorm=(0, 1),
+            unnorm=(np.array([0., 0.]), np.array([1., 1.])),
             )
 
         # Define neural network
