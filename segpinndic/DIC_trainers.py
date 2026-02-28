@@ -100,7 +100,7 @@ def tree_map_dicts(f, *trees):
 def get_jmaps(required_ujs):
     "Generate tree for computing chained jacobians"
 
-    logger.debug("get_jmaps")
+    # logger.debug("get_jmaps")
 
     # build tree of required gradients
     tree = {}
@@ -168,11 +168,11 @@ def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
 
     # take x_batch
     x_take = x_batch[n_take]# (s, xd)
-    log_ = logger.info if verbose else logger.debug
-    log_("x_batch")
-    log_(str_tensor(x_batch))# (n, xd)
-    log_("x_take")
-    log_(str_tensor(x_take))
+    # log_ = logger.info if verbose else logger.debug
+    # log_("x_batch")
+    # log_(str_tensor(x_batch))# (n, xd)
+    # log_("x_take")
+    # log_(str_tensor(x_take))
 
     # take subdomain params
     d = all_params
@@ -196,28 +196,28 @@ def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
         }
         for t_k in ["static", "trainable"]
     }
-    logger.debug("all_params")
+    # logger.debug("all_params")
     logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params))
-    logger.debug("all_params_take")
+    # logger.debug("all_params_take")
     logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params_take))
-    logger.debug("vmap f")
-    logger.debug(f)
+    # logger.debug("vmap f")
+    # logger.debug(f)
 
     # batch over parameters and points
     us, ws, us_raw = vmap(FBPINN_model_inner, in_axes=(f,0,None,None,None,None))(all_params_take, x_take, norm_fn, network_fn, unnorm_fn, window_fn)# (s, ud)
-    logger.debug("u")
-    logger.debug(str_tensor(us))
+    # logger.debug("u")
+    # logger.debug(str_tensor(us))
 
     # apply POU and sum
     u = jnp.concatenate([us, ws], axis=1)# (s, ud+1)
     u = jax.ops.segment_sum(u, p_take, indices_are_sorted=False, num_segments=len(np_take))# (_, ud+1)
     wp = u[:,-1:]
     u = u[:,:-1]/wp
-    logger.debug(str_tensor(u))
+    # logger.debug(str_tensor(u))
     u = jax.ops.segment_sum(u, np_take, indices_are_sorted=False, num_segments=len(x_batch))# (n, ud)
-    logger.debug(str_tensor(u))
+    # logger.debug(str_tensor(u))
     u = u/npou
-    logger.debug(str_tensor(u))
+    # logger.debug(str_tensor(u))
 
     return u, wp, us, ws, us_raw
 
@@ -225,14 +225,14 @@ def PINN_model(all_params, x_batch, model_fns, verbose=True):
     "Defines PINN model"
 
     norm_fn, network_fn, unnorm_fn = model_fns
-    log_ = logger.info if verbose else logger.debug
-    log_("x_batch")
-    log_(str_tensor(x_batch))# (n, xd)
+    # log_ = logger.info if verbose else logger.debug
+    # log_("x_batch")
+    # log_(str_tensor(x_batch))# (n, xd)
 
     # batch over parameters and points
     u, u_raw = vmap(PINN_model_inner, in_axes=(None,0,None,None,None))(all_params, x_batch, norm_fn, network_fn, unnorm_fn)# (n, ud)
-    logger.debug("u")
-    logger.debug(str_tensor(u))
+    # logger.debug("u")
+    # logger.debug(str_tensor(u))
 
     return u, u_raw
 
@@ -398,12 +398,12 @@ def get_inputs(x_batch, active, all_params, decomposition):
     ims_ = jnp.arange(all_params["static"]["decomposition"]["m"])
     active_ims = ims_[active==1]# assume unsorted
     fixed_ims = ims_[active==2]
-    logger.debug("updated active")
-    logger.debug(active)
-    logger.debug("active_ims")
-    logger.debug(active_ims)
-    logger.debug("fixed_ims")
-    logger.debug(fixed_ims)
+    # logger.debug("updated active")
+    # logger.debug(active)
+    # logger.debug("active_ims")
+    # logger.debug(active_ims)
+    # logger.debug("fixed_ims")
+    # logger.debug(fixed_ims)
 
     # note, numbers in all_ims == numbers in training_ims == numbers in m_take
     # which also means we need all m_take points above
@@ -415,20 +415,20 @@ def get_inputs(x_batch, active, all_params, decomposition):
     m_take = inv[m_take]
 
     # (!) note: make sure n_take, pous (and therefore p_take / np_take) are sorted - makes segment_sum quicker
-    logger.debug("takes")
-    logger.debug(str_tensor(m_take))
-    logger.debug(str_tensor(n_take))
+    # logger.debug("takes")
+    # logger.debug(str_tensor(m_take))
+    # logger.debug(str_tensor(n_take))
 
     # get POUs
     pous = all_params["static"]["decomposition"]["subdomain"]["pou"][all_ims].astype(int)
     np = jnp.stack([n_take, pous[m_take,0]], axis=-1).astype(int)# points and pous
-    logger.debug(str_tensor(np))
+    # logger.debug(str_tensor(np))
     npu,p_take = jnp.unique(np, axis=0, return_inverse=True)# unique points and pous (sorted), point-pou takes
     np_take = npu[:,0]
-    logger.debug(str_tensor(p_take))
-    logger.debug(str_tensor(np_take))
+    # logger.debug(str_tensor(p_take))
+    # logger.debug(str_tensor(np_take))
     npou = len(jnp.unique(all_params["static"]["decomposition"]["subdomain"]["pou"].astype(int)))# global npou
-    logger.debug(f"Total number of POUs: {npou}")
+    # logger.debug(f"Total number of POUs: {npou}")
 
     takes = (m_take, n_take, p_take, np_take, npou)
 
@@ -471,8 +471,8 @@ def _common_train_initialisation(c, key, all_params, problem, domain):
     # initialise optimiser
     optimiser = optax.adam(**c.optimiser_kwargs)
     all_opt_states = optimiser.init(all_params["trainable"])
-    logger.debug("all_opt_states")
-    logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_opt_states))
+    # logger.debug("all_opt_states")
+    # logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_opt_states))
     optimiser_fn, loss_fn = optimiser.update, problem.loss_fn
 
     # get global constraints (training points)
@@ -483,8 +483,8 @@ def _common_train_initialisation(c, key, all_params, problem, domain):
     x_batch_global = constraints_global[0][0]# (n, xd)
     
     required_ujs = constraints_global[0][1]
-    logger.debug("x_batch_global")
-    logger.debug(str_tensor(x_batch_global))
+    # logger.debug("x_batch_global")
+    # logger.debug(str_tensor(x_batch_global))
 
     # get jac maps
     jmaps = get_jmaps(required_ujs)
@@ -506,8 +506,8 @@ class FBPINNTrainer(_Trainer):
 
         # report
         logger.info(f"[i: {i}/{self.c.n_steps}] Average number of points/dimension in active subdomains: {_d:.2f}")
-        logger.debug("x_batch")
-        logger.debug(str_tensor(x_batch))
+        # logger.debug("x_batch")
+        # logger.debug(str_tensor(x_batch))
 
         return x_batch
 
@@ -534,14 +534,14 @@ class FBPINNTrainer(_Trainer):
         fixed_params = cut_fixed(all_params["trainable"])   # cut fixed params
         static_params = cut_all(all_params["static"])       # cut active/fixed params
         active_opt_states = tree_map_dicts(cut_active, all_opt_states)# because all_opt_states has more complex structure
-        logger.debug("active_params")
-        logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), active_params))
-        logger.debug("fixed_params")
-        logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), fixed_params))
-        logger.debug("static_params")
-        logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), static_params))
-        logger.debug("active_opt_states")
-        logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), active_opt_states))
+        # logger.debug("active_params")
+        # logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), active_params))
+        # logger.debug("fixed_params")
+        # logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), fixed_params))
+        # logger.debug("static_params")
+        # logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), static_params))
+        # logger.debug("active_opt_states")
+        # logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), active_opt_states))
 
         logger.info(f"[i: {i}/{self.c.n_steps}] Updating active inputs done ({time.time()-start0:.2f} s)")
 
@@ -577,8 +577,8 @@ class FBPINNTrainer(_Trainer):
         ps_ = vmap(network.init_params, in_axes=(0, None))(jnp.array(subkeys), *c.network_init_kwargs.values())
         if ps_[0]: all_params["static"]["network"] = tree_index(ps_[0],0)# grab first set of static params only
         if ps_[1]: all_params["trainable"]["network"] = {"subdomain": ps_[1]}# add subdomain key
-        logger.debug("all_params")
-        logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params))
+        # logger.debug("all_params")
+        # logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params))
         model_fns = (decomposition.norm_fn, network.network_fn, decomposition.unnorm_fn, decomposition.window_fn)
 
         # initialise scheduler
@@ -619,8 +619,8 @@ class FBPINNTrainer(_Trainer):
                 cost_ = update.cost_analysis()
                 p = total_size(active_params["network"])
                 f = cost_.get("flops", 0) if cost_ else 0
-                logger.debug("p, f")
-                logger.debug((p,f))
+                logger.info("p, f")
+                logger.info((p,f))
 
             # report initial model
             if i == 0:
@@ -721,8 +721,8 @@ class PINNTrainer(_Trainer):
         ps_ = network.init_params(key=subkey, **c.network_init_kwargs)
         if ps_[0]: all_params["static"]["network"] = ps_[0]
         if ps_[1]: all_params["trainable"]["network"] = {"subdomain": ps_[1]}# add subdomain key
-        logger.debug("all_params")
-        logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params))
+        # logger.debug("all_params")
+        # logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params))
 
         # define unnorm function
         mu_, sd_ = c.decomposition_init_kwargs["unnorm"]
