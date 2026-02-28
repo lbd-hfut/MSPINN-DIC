@@ -61,11 +61,16 @@ def main(
                 BufferManager.scale_uv[roi_id][2],
                 BufferManager.scale_uv[roi_id][3]
             ])
-            c.load_kwargs(decomposition_init_kwargs=dict(
-                subdomain_xs=c.subdomain_xs,
-                subdomain_ws=c.subdomain_ws,
-                unnorm=(mu, sd)
-            ))
+            c.load_kwargs(
+                decomposition_init_kwargs=dict(
+                    subdomain_xs=c.subdomain_xs,
+                    subdomain_ws=c.subdomain_ws,
+                    unnorm=(mu, sd)),
+                problem_init_kwargs=dict(
+                    ref_img = BufferManager.refImg,
+                    QKBQKT_def = BufferManager.QKBQKT_def,
+                    mask = BufferManager.mask[roi_id])
+            )
             run = trainer(c)
             run.train()
         
