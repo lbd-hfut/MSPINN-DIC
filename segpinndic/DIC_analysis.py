@@ -56,7 +56,6 @@ def main(
                 BufferManager.scale_uv[roi_id][0],
                 BufferManager.scale_uv[roi_id][1]
             ])
-
             sd = np.array([
                 BufferManager.scale_uv[roi_id][2],
                 BufferManager.scale_uv[roi_id][3]
