@@ -35,7 +35,7 @@ AllActiveSchedulerND
 FCN
 
 # interpolation: 插值方法 [bspline, bilinear, bicubic]
-bicubic
+bspline
 
 # loss_fun: 损失函数的选择 ["DIC_MSE", "DIC_ZNCC"]
 DIC_MSE
