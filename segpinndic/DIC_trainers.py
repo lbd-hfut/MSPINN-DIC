@@ -127,7 +127,7 @@ def get_jmaps(required_ujs):
 
     # list of chained grad functions
     nodes = get_nodes(tree)
-    logger.debug(nodes)
+    # logger.debug(nodes)
 
     # list of grad functions to evaluate
     leaves = tuple((i + 1, node[1]) for i,node in enumerate(nodes) if node[2])
