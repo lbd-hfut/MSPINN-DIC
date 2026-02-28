@@ -662,12 +662,17 @@ class FBPINNTrainer(_Trainer):
         c = self.c
         summary_,test_,model_save_ = [(i % f == 0) for f in
                                       [c.summary_freq, c.test_freq, c.model_save_freq]]
+        if lossval is None:
+            loss_val = None
+        else:
+            loss_val = lossval.item()
+        
         if summary_ or model_save_:
 
             # print summary
             if i != 0 and summary_:
                 rate = c.summary_freq / (time.time()-start1-report_time)
-                self._print_summary(i, lossval.item(), rate, start0)
+                self._print_summary(i, loss_val, rate, start0)
                 start1, report_time = time.time(), 0.
 
             if i != 0 and model_save_:
@@ -678,15 +683,11 @@ class FBPINNTrainer(_Trainer):
                 all_params["trainable"] = merge_active(active_params, all_params["trainable"])
                 all_opt_states = tree_map_dicts(merge_active, active_opt_states, all_opt_states)
 
-                if lossval is None:
-                    loss_array = jnp.array(jnp.nan)
-                else:
-                    loss_array = jnp.array(lossval.item())
-                self._save_model(i, (i, all_params, all_opt_states, active, loss_array))
+                self._save_model(i, (i, all_params, all_opt_states, active, jnp.array(loss_val) if loss_val is not None else jnp.array(jnp.nan)))
 
                 report_time += time.time()-start2
 
-        return lossval.item(), start1, report_time
+        return loss_val, start1, report_time
     
 
 class PINNTrainer(_Trainer):
