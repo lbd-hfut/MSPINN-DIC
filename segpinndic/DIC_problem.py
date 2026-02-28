@@ -66,10 +66,10 @@ class DIC_MSE(Problem):
         return [[x_batch_global, required_ujs]]
     
     @staticmethod
-    def loss_fn(all_params, x_batch, constraints):
+    def loss_fn(all_params, x_batch, uv):
         ref_img = all_params["static"]["problem"]["ref_img"]
         QKBQKT_def = all_params["static"]["problem"]["QKBQKT_def"]
-        u, v = constraints
+        u, v = uv[:,0], uv[:,1]
 
         xref, yref = x_batch[:,0], x_batch[:,1]
         xs, ys = xref + u, yref + v
