@@ -353,23 +353,21 @@ def PINN_update(optimiser_fn, active_opt_states,
 
 # For fast test inference only
 
-'''用上面的predict forward'''
+@partial(jax.jit, static_argnums=(1,3,5))
+def _FBPINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, takes, model_fns):
+    all_params = combine(all_params_dynamic, all_params_static)
+    return FBPINN_predict_forward(all_params, x_batch, takes, model_fns, jmaps)
+def FBPINN_model_jit(all_params, x_batch, jmaps, takes, model_fns, verbose=True):
+    all_params_dynamic, all_params_static = partition(all_params)
+    return _FBPINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, takes, model_fns, verbose)
 
-# @partial(jax.jit, static_argnums=(1,4,5))
-# def _FBPINN_model_jit(all_params_dynamic, all_params_static, x_batch, takes, model_fns, verbose):
-#     all_params = combine(all_params_dynamic, all_params_static)
-#     return FBPINN_model(all_params, x_batch, takes, model_fns, verbose)
-# def FBPINN_model_jit(all_params, x_batch, takes, model_fns, verbose=True):
-#     all_params_dynamic, all_params_static = partition(all_params)
-#     return _FBPINN_model_jit(all_params_dynamic, all_params_static, x_batch, takes, model_fns, verbose)
-
-# @partial(jax.jit, static_argnums=(1,3,4))
-# def _PINN_model_jit(all_params_dynamic, all_params_static, x_batch, model_fns, verbose):
-#     all_params = combine(all_params_dynamic, all_params_static)
-#     return PINN_model(all_params, x_batch, model_fns, verbose)
-# def PINN_model_jit(all_params, x_batch, model_fns, verbose=True):
-#     all_params_dynamic, all_params_static = partition(all_params)
-#     return _PINN_model_jit(all_params_dynamic, all_params_static, x_batch, model_fns, verbose)
+@partial(jax.jit, static_argnums=(1,3,4))
+def _PINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, model_fns):
+    all_params = combine(all_params_dynamic, all_params_static)
+    return PINN_predict_forward(all_params, x_batch, jmaps, model_fns)
+def PINN_predict_jit(all_params, x_batch, jmaps, model_fns):
+    all_params_dynamic, all_params_static = partition(all_params)
+    return _PINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, model_fns)
 
 
 def get_inputs(x_batch, active, all_params, decomposition):
@@ -651,7 +649,9 @@ class FBPINNTrainer(_Trainer):
         all_params["trainable"] = merge_active(active_params, all_params["trainable"])
         all_opt_states = tree_map_dicts(merge_active, active_opt_states, all_opt_states)
 
-        return all_params
+        u, v, exx, exy, eyy = self._predict(all_params, decomposition, x_batch_global, jmaps, model_fns)
+        
+        return all_params, u, v, exx, exy, eyy
 
     def _report(self, i, start0, start1, report_time,
                 all_params, all_opt_states,
@@ -688,6 +688,45 @@ class FBPINNTrainer(_Trainer):
                 report_time += time.time()-start2
 
         return loss_val, start1, report_time
+    
+    def _predict(self, all_params, decomposition, x_batch_global, jmaps, model_fns):
+        if x_batch_global.shape[0] > 512**2:
+            batch_size = 512**2
+            r = x_batch_global.shape[0]%batch_size
+            shift = batch_size-r if r else 0
+            irange = jnp.arange(0, x_batch_global.shape[0], batch_size)# (k)
+            irange = irange.at[-1].add(-shift)
+            
+            def take_batch(i):
+                return x_batch_global[i:i+batch_size]
+            
+            x_batches = jax.vmap(take_batch)(irange)   # (m, batch_size, 2)
+        else:
+            batch_size = x_batch_global.shape[0]
+            x_batches = x_batch_global[None, ...]   # (1, batch_size, 2)
+        
+        u = v = exx = exy = eyy = jnp.zeros_like(all_params["static"]["problem"]["ref_img"])
+        
+        for i, x_batch in enumerate(x_batches):
+            logger.info(f"Predicting on batch {i+1}/{x_batches.shape[0]}..")
+            active = jnp.zeros(all_params["static"]["decomposition"]["m"], dtype=int)
+            takes, _, (active, cut_active, cut_fixed, cut_all, merge_active) = \
+                get_inputs(x_batch, active, all_params, decomposition)
+                
+            trainable_params = cut_active(all_params["trainable"])
+            static_params = cut_all(all_params["static"])
+            all_params_ = {"static":static_params, "trainable":trainable_params}
+            
+            ujs = FBPINN_model_jit(all_params_, x_batch, jmaps, takes, model_fns)
+            u_, v_, ux_, uy_, vx_, vy_ = ujs
+            exx_, exy_, eyy_ = ux_, (uy_+vx_)/2, vy_
+            
+            u[x_batch[:,1].astype(jnp.int32), x_batch[:,0].astype(jnp.int32)]=u_.flatten()
+            v[x_batch[:,1].astype(jnp.int32), x_batch[:,0].astype(jnp.int32)]=v_.flatten()
+            exx[x_batch[:,1].astype(jnp.int32), x_batch[:,0].astype(jnp.int32)]=exx_.flatten()
+            exy[x_batch[:,1].astype(jnp.int32), x_batch[:,0].astype(jnp.int32)]=exy_.flatten()
+            eyy[x_batch[:,1].astype(jnp.int32), x_batch[:,0].astype(jnp.int32)]=eyy_.flatten()
+        return u, v, exx, exy, eyy
     
 
 class PINNTrainer(_Trainer):
@@ -787,6 +826,8 @@ class PINNTrainer(_Trainer):
         all_params["trainable"] = active_params
         all_opt_states = active_opt_states
 
+        
+        
         return all_params
 
     def _report(self, i, start0, start1, report_time,
@@ -821,3 +862,5 @@ class PINNTrainer(_Trainer):
                 report_time += time.time()-start2
 
         return lossval.item(), start1, report_time
+    
+    
