@@ -617,7 +617,8 @@ class FBPINNTrainer(_Trainer):
                                              takes, x_batch, model_fns, loss_fn).compile()
                 logger.info(f"[i: {i}/{self.c.n_steps}] Compiling done ({time.time()-startc:.2f} s)")
                 cost_ = update.cost_analysis()
-                p,f = total_size(active_params["network"]), cost_[0]["flops"] if (cost_ and "flops" in cost_[0]) else 0
+                p = total_size(active_params["network"])
+                f = cost_.get("flops", 0) if cost_ else 0
                 logger.debug("p, f")
                 logger.debug((p,f))
 
