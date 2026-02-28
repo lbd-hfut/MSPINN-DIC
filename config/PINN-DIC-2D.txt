@@ -67,7 +67,7 @@ True
 0.0
 
 # summary_freq: 打印求解loss频率
-1000
+10
 
 # test_freq: 打印测试loss频率
 1000
