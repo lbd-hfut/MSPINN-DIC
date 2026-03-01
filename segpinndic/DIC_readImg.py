@@ -1,4 +1,5 @@
 from segpinndic.DIC_importlib import partial, jnp, jax, math, np, os, label, Image
+from segpinndic.utils.logger import logger
 
 # ============================================
 # 线程缓冲区 (用于存储中间计算结果)
@@ -151,16 +152,20 @@ def image_gradient_from_bcoef(ref_bcoef, roi_mask, degree, border=3):
 def build_seed_buffer_jax(img, mask, degree=5):
     BufferManager.QK = get_QK(degree)
     plot_bcoef = form_bcoef(img, degree)
+    logger.info("precomputing seed buffers: gradients")
     BufferManager.fx, BufferManager.fy = image_gradient_from_bcoef(plot_bcoef, mask, degree)
+    logger.info("precomputing seed buffers: QKBQKT_ref")
     BufferManager.QKBQKT_ref = get_QK_B_QKT(plot_bcoef, img, degree)
 
 def build_DIC_buffer_jax(img, degree=5):
     plot_bcoef = form_bcoef(img, degree)
+    logger.info("precomputing seed buffers: QKBQKT_def")
     BufferManager.QKBQKT_def = get_QK_B_QKT(plot_bcoef, img, degree)
     
     
 class ImgDataset:
     def __init__(self, DIC_config, Seed_config):
+        logger.info(f"Scanning directory for images: {DIC_config.input_dir}")
         image_files = np.array([
             x.path for x in os.scandir(DIC_config.input_dir)
             if x.name.lower().endswith((".bmp", ".png", ".jpg", ".tiff"))
@@ -173,6 +178,7 @@ class ImgDataset:
         image_files.sort()
         
         # 参考图 & mask
+        logger.info(f"Found {len(image_files)} image files. Assuming first is reference and last is mask.")
         self.rfimage_file = image_files[0]
         self.mask_file = image_files[-1]
         # 将参考图像和mask图像存入 BufferManager
@@ -203,6 +209,7 @@ class ImgDataset:
             ROI_list_pad.append(roi_i_pad)
         BufferManager.mask = ROI_list
         BufferManager.mask_pad = ROI_list_pad
+        logger.info("precomputing seed buffers")
         build_seed_buffer_jax(BufferManager.refImg, mask_bin, degree=5)
 
         # 变形图像序列
