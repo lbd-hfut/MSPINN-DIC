@@ -1,4 +1,4 @@
-from segpinndic.DIC_importlib import *
+from segpinndic.DIC_importlib import partial, jnp, jax, math, np, os, label, Image
 
 # ============================================
 # 线程缓冲区 (用于存储中间计算结果)
@@ -20,36 +20,58 @@ class BufferManager:
 def plus_power(x, p):
     return jnp.where(x > 0, x ** p, 0.0)
 
-@partial(jax.jit, static_argnums=(1,))
-def beta5_nth(x, n=0):
-    coeffs = jnp.array([1, -6, 15, -20, 15, -6, 1])
-    shifts = jnp.array([-3, -2, -1, 0, 1, 2, 3])
-    factor = math.factorial(5) // math.factorial(5 - n)
+# 1. 泛化的 B样条基函数及其导数计算
+@partial(jax.jit, static_argnums=(1, 2))
+def beta_nth(x, n, degree):
+    d = degree
+    # 静态生成系数和偏移量 (在 JIT 编译期完成)
+    coeffs_list = [((-1)**k) * math.comb(d + 1, k) for k in range(d + 2)]
+    shifts_list = [(d + 1) / 2.0 - k for k in range(d + 2)]
+    
+    coeffs = jnp.array(coeffs_list)
+    shifts = jnp.array(shifts_list)
+    factor = math.factorial(d) // math.factorial(d - n)
 
     def body(c, s):
-        return c * factor * plus_power(x + s, 5 - n)
+        return c * factor * plus_power(x + s, d - n)
 
+    # 向量化计算求和
     val = jnp.sum(jax.vmap(body)(coeffs, shifts), axis=0)
-    return val / 120.0
+    return val / math.factorial(d)
 
-@jax.jit
-def get_QK():
-    x = jnp.array([-2, -1, 0, 1, 2, 3])
+# 2. 泛化的多项式系数矩阵 QK
+@partial(jax.jit, static_argnums=(0,))
+def get_QK(degree):
+    N = degree + 1
+    offset = degree // 2
+    # 动态生成局部坐标系 
+    # d=5 -> [-2, -1, 0, 1, 2, 3]
+    # d=3 -> [-1, 0, 1, 2]
+    # d=1 -> [0, 1]
+    x = jnp.arange(-offset, -offset + N)
+    
     def row(n):
-        return ((-1)**n) * beta5_nth(x, n) / math.factorial(n)
-    return jnp.stack([row(n) for n in range(6)])
+        return ((-1)**n) * beta_nth(x, n, degree) / math.factorial(n)
+    return jnp.stack([row(n) for n in range(N)])
 
-@jax.jit
-def form_bcoef(img, border=3):
+# 3. 泛化的 B样条系数滤波器
+@partial(jax.jit, static_argnums=(1, 2))
+def form_bcoef(img, degree, border=3):
     img = jnp.pad(img, border, mode="edge")
     h, w = img.shape
-    x_sample = jnp.array([-2, -1, 0, 1, 2])
-    kernel_b = beta5_nth(x_sample, 0)
+    
+    # 针对 d=1 (双一次插值)，无需预滤波，FFT会自动除以 1
+    radius = degree // 2
+    x_sample = jnp.arange(-radius, radius + 1)
+    kernel_b = beta_nth(x_sample, 0, degree)
 
     def make_kernel(n):
         k = jnp.zeros(n)
-        k = k.at[:3].set(kernel_b[2:])
-        k = k.at[-2:].set(kernel_b[:2])
+        center_idx = radius
+        k = k.at[0].set(kernel_b[center_idx])
+        if radius > 0:
+            k = k.at[1:radius+1].set(kernel_b[center_idx+1:])
+            k = k.at[-radius:].set(kernel_b[:center_idx])
         return jnp.fft.fft(k)
 
     kx = make_kernel(w)
@@ -60,12 +82,15 @@ def form_bcoef(img, border=3):
 
     return img
 
-@jax.jit
-def get_QK_B_QKT(plot_bcoef, img, border=3):
+# 4. 泛化的子区提取与乘法
+@partial(jax.jit, static_argnums=(2, 3))
+def get_QK_B_QKT(plot_bcoef, img, degree, border=3):
     QK = BufferManager.QK
     QKT = QK.T
-    offset = 2
+    offset = degree // 2
+    N = degree + 1
     H, W = img.shape
+    
     ys, xs = jnp.meshgrid(
         jnp.arange(H),
         jnp.arange(W),
@@ -75,27 +100,26 @@ def get_QK_B_QKT(plot_bcoef, img, border=3):
     top  = ys + border - offset
     left = xs + border - offset
 
-    dy = jnp.arange(6)[:, None]    # (6,1)
-    dx = jnp.arange(6)[None, :]    # (1,6)
+    # 动态尺寸切片
+    dy = jnp.arange(N)[:, None]    # (N,1)
+    dx = jnp.arange(N)[None, :]    # (1,N)
 
     blocks = plot_bcoef[
         top[..., None, None] + dy,
         left[..., None, None] + dx
-    ]                               # (H, W, 6, 6)
+    ]                              # (H, W, N, N)
 
     return jnp.einsum("ij,hwjk,kl->hwil", QK, blocks, QKT)
 
 
-@jax.jit
-def image_gradient_from_bcoef(
-    ref_bcoef,        # (H+2b, W+2b)
-    roi_mask,         # (H, W), bool or int  
-    border=3
-):
+# 5. 泛化的梯度计算
+@partial(jax.jit, static_argnums=(2, 3))
+def image_gradient_from_bcoef(ref_bcoef, roi_mask, degree, border=3):
     QK = BufferManager.QK
     QKT = QK.T
     H, W = roi_mask.shape
-    offset = 2
+    offset = degree // 2
+    N = degree + 1
 
     ys, xs = jnp.meshgrid(
         jnp.arange(H),
@@ -106,13 +130,13 @@ def image_gradient_from_bcoef(
     top  = ys + border - offset
     left = xs + border - offset
 
-    dy = jnp.arange(6)[:, None]
-    dx = jnp.arange(6)[None, :]
+    dy = jnp.arange(N)[:, None]
+    dx = jnp.arange(N)[None, :]
 
     blocks = ref_bcoef[
         top[..., None, None] + dy,
         left[..., None, None] + dx
-    ]                              # (H, W, 6, 6)
+    ]
 
     M = jnp.einsum("ij,hwjk,kl->hwil", QK, blocks, QKT)
 
@@ -121,15 +145,18 @@ def image_gradient_from_bcoef(
 
     return fx, fy
 
-def build_seed_buffer_jax(img, mask):
-    BufferManager.QK = get_QK()
-    plot_bcoef = form_bcoef(img)
-    BufferManager.fx, BufferManager.fy = image_gradient_from_bcoef(plot_bcoef, mask)
-    BufferManager.QKBQKT_ref = get_QK_B_QKT(plot_bcoef, img)
+# ============================================
+# Buffer 构建函数 (增加 degree 参数)
+# ============================================
+def build_seed_buffer_jax(img, mask, degree=5):
+    BufferManager.QK = get_QK(degree)
+    plot_bcoef = form_bcoef(img, degree)
+    BufferManager.fx, BufferManager.fy = image_gradient_from_bcoef(plot_bcoef, mask, degree)
+    BufferManager.QKBQKT_ref = get_QK_B_QKT(plot_bcoef, img, degree)
 
-def build_DIC_buffer_jax(img):
-    plot_bcoef = form_bcoef(img)
-    BufferManager.QKBQKT_def = get_QK_B_QKT(plot_bcoef, img)
+def build_DIC_buffer_jax(img, degree=5):
+    plot_bcoef = form_bcoef(img, degree)
+    BufferManager.QKBQKT_def = get_QK_B_QKT(plot_bcoef, img, degree)
     
     
 class ImgDataset:
@@ -176,11 +203,11 @@ class ImgDataset:
             ROI_list_pad.append(roi_i_pad)
         BufferManager.mask = ROI_list
         BufferManager.mask_pad = ROI_list_pad
-        build_seed_buffer_jax(BufferManager.refImg, mask_bin)
+        build_seed_buffer_jax(BufferManager.refImg, mask_bin, degree=5)
 
         # 变形图像序列
         self.dfimage_files = image_files[1:-1]
-        self.method = DIC_config.interpolation
+        self.spline_degree = getattr(DIC_config, 'spline_degree', 5)
 
     def __len__(self):
         return len(self.dfimage_files)
@@ -194,8 +221,7 @@ class ImgDataset:
             mode='constant',
             constant_values=False
         )
-        if self.method == "bspline":
-            build_DIC_buffer_jax(BufferManager.defImg)
+        build_DIC_buffer_jax(BufferManager.defImg, degree=self.spline_degree)
 
     @staticmethod
     def open_image(name):
@@ -203,23 +229,6 @@ class ImgDataset:
         return jnp.array(img, dtype=jnp.float32)/255.0
     
 if __name__ == "__main__":
-    # refImg = jnp.array(
-    #     Image.open("./case/case9/image/img_000.bmp").convert('L'), 
-    #     dtype=jnp.float32
-    # ) / 255
-    
-    # defImg =jnp.array(
-    #     Image.open("./case/case9/image/img_001.bmp").convert('L'), 
-    #     dtype=jnp.float32
-    # ) / 255
-    
-    # mask =jnp.array(
-    #     Image.open("./case/case9/image/img_002.bmp").convert('L'), 
-    #     dtype=jnp.float32
-    # ) > 0 
-    
-    # build_seed_buffer_jax(refImg, mask)
-    # build_DIC_buffer_jax(defImg)
     
     from segpinndic.DIC_config import seed_config_txt, DIC_config_txt
     seed_config_path = "../config/Seed_Configuration.txt"
