@@ -357,9 +357,9 @@ def PINN_update(optimiser_fn, active_opt_states,
 def _FBPINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, takes, model_fns):
     all_params = combine(all_params_dynamic, all_params_static)
     return FBPINN_predict_forward(all_params, x_batch, takes, model_fns, jmaps)
-def FBPINN_model_jit(all_params, x_batch, jmaps, takes, model_fns, verbose=True):
+def FBPINN_model_jit(all_params, x_batch, jmaps, takes, model_fns):
     all_params_dynamic, all_params_static = partition(all_params)
-    return _FBPINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, takes, model_fns, verbose)
+    return _FBPINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, takes, model_fns)
 
 @partial(jax.jit, static_argnums=(1,3,4))
 def _PINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, model_fns):
@@ -698,7 +698,11 @@ class FBPINNTrainer(_Trainer):
             irange = irange.at[-1].add(-shift)
             
             def take_batch(i):
-                return x_batch_global[i:i+batch_size]
+                return jax.lax.dynamic_slice(
+                    x_batch_global,
+                    (i, 0),
+                    (batch_size, x_batch_global.shape[1])
+                )
             
             x_batches = jax.vmap(take_batch)(irange)   # (m, batch_size, 2)
         else:
@@ -708,6 +712,7 @@ class FBPINNTrainer(_Trainer):
         u = v = exx = exy = eyy = jnp.zeros_like(all_params["static"]["problem"]["ref_img"])
         
         for i, x_batch in enumerate(x_batches):
+            x_batch = x_batch.astype(jnp.float32)
             logger.info(f"Predicting on batch {i+1}/{x_batches.shape[0]}..")
             active = jnp.zeros(all_params["static"]["decomposition"]["m"], dtype=int)
             takes, _, (active, cut_active, cut_fixed, cut_all, merge_active) = \
@@ -720,12 +725,13 @@ class FBPINNTrainer(_Trainer):
             ujs = FBPINN_model_jit(all_params_, x_batch, jmaps, takes, model_fns)
             u_, v_, ux_, uy_, vx_, vy_ = ujs
             exx_, exy_, eyy_ = ux_, (uy_+vx_)/2, vy_
-            
-            u[x_batch[:,1].astype(jnp.int32), x_batch[:,0].astype(jnp.int32)]=u_.flatten()
-            v[x_batch[:,1].astype(jnp.int32), x_batch[:,0].astype(jnp.int32)]=v_.flatten()
-            exx[x_batch[:,1].astype(jnp.int32), x_batch[:,0].astype(jnp.int32)]=exx_.flatten()
-            exy[x_batch[:,1].astype(jnp.int32), x_batch[:,0].astype(jnp.int32)]=exy_.flatten()
-            eyy[x_batch[:,1].astype(jnp.int32), x_batch[:,0].astype(jnp.int32)]=eyy_.flatten()
+            ys = x_batch[:, 1].astype(jnp.int32)
+            xs = x_batch[:, 0].astype(jnp.int32)
+            u = u.at[ys, xs].set(u_.flatten())
+            v = v.at[ys, xs].set(v_.flatten())
+            exx = exx.at[ys, xs].set(exx_.flatten())
+            exy = exy.at[ys, xs].set(exy_.flatten())
+            eyy = eyy.at[ys, xs].set(eyy_.flatten())
         return u, v, exx, exy, eyy
     
 
