@@ -5,7 +5,8 @@ from segpinndic.utils.logger import logger
 # 线程缓冲区 (用于存储中间计算结果)
 # ============================================
 class BufferManager:
-    QK = None
+    SEED_QK = None
+    DIC_QK = None
     QKBQKT_def = None
     QKBQKT_ref = None
     fx = None
@@ -85,8 +86,7 @@ def form_bcoef(img, degree, border=3):
 
 # 4. 泛化的子区提取与乘法
 @partial(jax.jit, static_argnums=(2, 3))
-def get_QK_B_QKT(plot_bcoef, img, degree, border=3):
-    QK = BufferManager.QK
+def get_QK_B_QKT(plot_bcoef, img, degree, border=3, QK=None):
     QKT = QK.T
     offset = degree // 2
     N = degree + 1
@@ -115,8 +115,7 @@ def get_QK_B_QKT(plot_bcoef, img, degree, border=3):
 
 # 5. 泛化的梯度计算
 @partial(jax.jit, static_argnums=(2, 3))
-def image_gradient_from_bcoef(ref_bcoef, roi_mask, degree, border=3):
-    QK = BufferManager.QK
+def image_gradient_from_bcoef(ref_bcoef, roi_mask, degree, border=3, QK=None):
     QKT = QK.T
     H, W = roi_mask.shape
     offset = degree // 2
@@ -150,17 +149,19 @@ def image_gradient_from_bcoef(ref_bcoef, roi_mask, degree, border=3):
 # Buffer 构建函数 (增加 degree 参数)
 # ============================================
 def build_seed_buffer_jax(img, mask, degree=5):
-    BufferManager.QK = get_QK(degree)
+    BufferManager.SEED_QK = get_QK(degree)
     plot_bcoef = form_bcoef(img, degree)
     logger.info("precomputing seed buffers: gradients")
-    BufferManager.fx, BufferManager.fy = image_gradient_from_bcoef(plot_bcoef, mask, degree)
+    BufferManager.fx, BufferManager.fy = image_gradient_from_bcoef(
+        plot_bcoef, mask, degree, QK=BufferManager.SEED_QK)
     logger.info("precomputing seed buffers: QKBQKT_ref")
-    BufferManager.QKBQKT_ref = get_QK_B_QKT(plot_bcoef, img, degree)
+    BufferManager.QKBQKT_ref = get_QK_B_QKT(plot_bcoef, img, degree, QK=BufferManager.SEED_QK)
 
 def build_DIC_buffer_jax(img, degree=5):
+    BufferManager.DIC_QK = get_QK(degree)
     plot_bcoef = form_bcoef(img, degree)
     logger.info("precomputing seed buffers: QKBQKT_def")
-    BufferManager.QKBQKT_def = get_QK_B_QKT(plot_bcoef, img, degree)
+    BufferManager.QKBQKT_def = get_QK_B_QKT(plot_bcoef, img, degree, QK=BufferManager.DIC_QK)
     
     
 class ImgDataset:
