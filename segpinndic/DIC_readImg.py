@@ -238,11 +238,11 @@ class ImgDataset:
 if __name__ == "__main__":
     
     from segpinndic.DIC_config import seed_config_txt, DIC_config_txt
-    seed_config_path = "../config/Seed_Configuration.txt"
-    dic_config_path = "../config/PINN-DIC-2D.txt"
+    seed_config_path = "./config/Seed_Configuration.txt"
+    dic_config_path = "./config/PINN-DIC-2D.txt"
 
-    DIC_config = DIC_config_txt(dic_config_path)
-    Seed_config = seed_config_txt(seed_config_path)
+    DIC_config = DIC_config_txt(dic_config_path, verbose=False)
+    Seed_config = seed_config_txt(seed_config_path, verbose=False)
     
     ImgData = ImgDataset(DIC_config, Seed_config)
     ImgData.get_image(0)
