@@ -414,16 +414,13 @@ def iterativesearch_py(
     yc = rectroi.y
 
     mask = rectroi.mask.reshape(-1).astype(jnp.float32)
-    dx = rectroi.X_flat.astype(jnp.int32)
-    dy = rectroi.Y_flat.astype(jnp.int32)
+    valid_idx = jnp.where(mask>0)[0]  
+    dx = rectroi.X_flat[valid_idx].astype(jnp.int32)
+    dy = rectroi.Y_flat[valid_idx].astype(jnp.int32)
 
     # ---------- Reference image & gradient ----------
     X = xc + dx
     Y = yc + dy
-
-    f = BufferManager.refImg[Y, X]
-    fx = BufferManager.fx[Y, X]
-    fy = BufferManager.fy[Y, X]
     
     # ---------- numpy → jax ----------
     defv0 = jnp.asarray(
@@ -432,89 +429,54 @@ def iterativesearch_py(
             jnp.zeros(4, dtype=jnp.float32)
         ])
     )
-    dx = jnp.asarray(dx)
-    dy = jnp.asarray(dy)
-    mask = jnp.asarray(mask)
-    f = jnp.asarray(f)
-    fx = jnp.asarray(fx)
-    fy = jnp.asarray(fy)
-    
-    # ---------- JAX core ----------
-    defv, corrcoef, diffnorm, iters, ok = iterativesearch_jax(
-        defv0, BufferManager.QKBQKT_ref,
-        dx, dy, mask,
-        f, fx, fy,
-        xc, yc,
-        max_iter,
-        cutoff_diffnorm,
-        lambda_reg
-    )
-    
-    return (
-        bool(ok),
-        jnp.asarray(defv),
-        float(corrcoef),
-        float(diffnorm),
-        int(iters)
-    )
 
-@jax.jit
-def precompute_gn_terms(dx, dy, mask, f, fx, fy, lambda_reg):
-    w = mask
-    n = jnp.sum(w) + 1e-12
-
-    fm = jnp.sum(w * f) / n
-    diff = (f - fm) * w
+    f = BufferManager.refImg[Y, X]
+    fx = BufferManager.fx[Y, X]
+    fy = BufferManager.fy[Y, X]
+    
+    n = jnp.sum(mask)
+    fm = jnp.sum(f) / n
+    diff = (f - fm)
     deltaf = jnp.sqrt(jnp.sum(diff * diff))
 
-    valid = deltaf > lambda_reg
-    deltaf_inv = jnp.where(valid, 1.0 / deltaf, 0.0)
-    r = diff * deltaf_inv
-
-    df_dp = jnp.stack([
-        fx,
-        fy,
-        dx * fx,
-        dx * fy,
-        dy * fx,
-        dy * fy
-    ], axis=1)
-
-    df_dp = df_dp * w[:, None]
-
-    H = 2.0 * (deltaf_inv**2) * (df_dp.T @ df_dp)
-
-    return valid, fm, deltaf_inv, df_dp, H
-
-@jax.jit
-def solve_linear_system(H, g, eps=1e-6):
-    """
-    Solve H x = g
-    """
-    H_reg = H + eps * jnp.eye(H.shape[0], dtype=H.dtype)
-    return jnp.linalg.solve(H_reg, g)
-
-@jax.jit
-def safe_cholesky(H, eps=1e-6):
-    H_reg = H #+ eps * jnp.eye(6, dtype=H.dtype)
-
-    def chol(_):
-        return jnp.linalg.cholesky(H_reg), True
-
-    def fail(_):
-        return jnp.zeros_like(H_reg), False
-
-    is_safe = jnp.all(jnp.isfinite(H_reg)) #& jnp.allclose(H_reg, H_reg.T, atol=1e-4)
-
-    return jax.lax.cond(
-        is_safe, chol, fail, operand=None)
+    if deltaf < lambda_reg:
+        return FAILED, defv0, -1, 0, 0
+    else: 
+        deltaf_inv = 1.0 / deltaf
+        df_dp = jnp.stack([
+            fx, fy, dx*fx, dx*fy, dy*fx, dy*fy
+        ], axis=1)
+        H = 2.0 * (deltaf_inv**2) * (df_dp.T @ df_dp)
+        
+        try:
+            cholesky_G = jnp.linalg.cholesky(H)
+            positivedef = True
+        except RuntimeError:
+            positivedef = False  # 非正定
+            
+        if positivedef:
+            defv = defv0
+            for iter in range(max_iter):
+                defv, diffnorm, corr, ok = newton_step(
+                    defv, BufferManager.QKBQKT_ref,
+                    xc, yc, dx, dy, mask,
+                    f, fm, deltaf_inv,
+                    df_dp, cholesky_G, lambda_reg
+                )
+                if diffnorm < cutoff_diffnorm:
+                    return SUCCESS, defv, corr, diffnorm, iter
+                if ok == FAILED:
+                    return FAILED, defv0, corr, diffnorm, iter
+            return SUCCESS, defv, corr, diffnorm, iter
+        else:
+            return FAILED, defvector_init, -1.0, -1.0, 0
 
 @jax.jit
 def newton_step(
     defv, QKBQKT_ref,
     xc, yc, dx, dy, mask,
     f, fm, deltaf_inv,
-    df_dp, H, lambda_reg
+    df_dp, cholesky_G, lambda_reg
 ):
     u = defv[0] + defv[2] * dx + defv[4] * dy
     v = defv[1] + defv[3] * dx + defv[5] * dy
@@ -523,80 +485,31 @@ def newton_step(
     Yw = yc + dy + v
 
     g, oob = interpqbs(Xw, Yw, QKBQKT_ref)
-    notoob_float = jnp.asarray(~oob, dtype=jnp.float32)
-    w = mask * notoob_float
 
-    gm = jnp.sum(w * g) / (jnp.sum(w) + 1e-12)
-    diffg = (g - gm) * w
+    gm = jnp.sum(g) / (jnp.sum(mask))
+    diffg = (g - gm)
     deltag = jnp.sqrt(jnp.sum(diffg * diffg))
 
     valid = deltag > lambda_reg
     deltag_inv = jnp.where(valid, 1.0 / deltag, 0.0)
 
-    r = ((f - fm) * deltaf_inv - (g - gm) * deltag_inv) * w
+    r = ((f - fm) * deltaf_inv - (g - gm) * deltag_inv)
     corrcoef = jnp.sum(r * r)
 
     grad = 2 * deltaf_inv * (r @ df_dp)
     
-    # ---------- choose solver ----------
-    G, is_pd = safe_cholesky(H)
-    def solve_chol(_):
-        # G G^T δ = g
-        y = jax.scipy.linalg.solve_triangular(G, grad, lower=True)
-        delta = jax.scipy.linalg.solve_triangular(G.T, y, lower=False)
-        return delta
-    def solve_fallback(_):
-        return solve_linear_system(H, grad)
-    delta = jax.lax.cond(is_pd, solve_chol, solve_fallback, operand=None)
+    y = jnp.linalg.solve(cholesky_G, grad)
+    x = jnp.linalg.solve(cholesky_G.T, y)
+    delta = -x
     
     # ---------- update ----------
     diffnorm = jnp.linalg.norm(delta)
     defv_new = inverse_compositional_update(defv, delta)
     
     # ---------- correlation (optional) ---------
-    ok = jnp.isfinite(diffnorm) & valid 
+    ok = jnp.isfinite(diffnorm) & valid
     return defv_new, diffnorm, corrcoef, ok
 
-@jax.jit
-def iterativesearch_jax(
-    defv, QKBQKT_ref,
-    dx, dy, mask,
-    f, fx, fy,
-    xc, yc,
-    max_iter,
-    cutoff_diffnorm,
-    lambda_reg
-):
-    valid, fm, deltaf_inv, df_dp, H = precompute_gn_terms(
-        dx, dy, mask, f, fx, fy, lambda_reg
-    )
-
-    def cond(state):
-        i, defv, diffnorm, *_ = state
-        return (i < max_iter) & (diffnorm > cutoff_diffnorm) & valid
-
-    def body(state):
-        i, defv, *_ = state
-        defv, diffnorm, corr, ok = newton_step(
-            defv, QKBQKT_ref,
-            xc, yc, dx, dy, mask,
-            f, fm, deltaf_inv,
-            df_dp, H, lambda_reg
-        )
-        return i + 1, defv, diffnorm, corr, ok
-
-    init = (0, defv, 1e10, -1.0, FAILED)
-    it, defv, diffnorm, corrcoef, ok = jax.lax.while_loop(cond, body, init)
-    # ---------- post check ----------
-    U, V = defv[0], defv[1]
-    U0, V0 = init[1][0], init[1][1]
-    step = jnp.sqrt(len(mask))
-    disp_ok = (
-        (jnp.abs(U - U0) < step) &
-        (jnp.abs(V - V0) < step)
-    )
-    ok_final = ok & disp_ok
-    return defv, corrcoef, diffnorm, it, ok_final
 
 # -------------------------
 # B-spline 插值
@@ -748,4 +661,15 @@ if __name__ == "__main__":
         BufferManager.defImg*255,
         seed_pos, seed_uv, DIC_config.output_dir, 'seed',0
     )
+    
+    BufferManager.scale_uv = [jnp.asarray((
+            (jnp.max(a[:,0]) + jnp.min(a[:,0]))/2,
+            (jnp.max(a[:,1]) + jnp.min(a[:,1]))/2,
+            (jnp.max(a[:,0]) - jnp.min(a[:,0]))/2,
+            (jnp.max(a[:,1]) - jnp.min(a[:,1]))/2)) for a in seed_uv]
+    
+    for i, scale_uv in enumerate(BufferManager.scale_uv):
+        print(f"roi_{i} scale uv: {scale_uv}")
+        print(f"umax: {jnp.max(seed_uv[i][:,0])}, v_max: {jnp.max(seed_uv[i][:,1])}")
+        print(f"umin: {jnp.min(seed_uv[i][:,0])}, v_min: {jnp.min(seed_uv[i][:,1])}")
     
