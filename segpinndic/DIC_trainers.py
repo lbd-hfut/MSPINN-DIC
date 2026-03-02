@@ -344,7 +344,7 @@ def FBPINN_predict_jit(all_params, x_batch, jmaps, takes, model_fns):
 @partial(jax.jit, static_argnums=(1,3,4))
 def _PINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, model_fns):
     all_params = combine(all_params_dynamic, all_params_static)
-    return PINN_predict_forward(all_params, x_batch, jmaps, model_fns)
+    return PINN_predict_forward(all_params, x_batch, model_fns, jmaps)
 def PINN_predict_jit(all_params, x_batch, jmaps, model_fns):
     all_params_dynamic, all_params_static = partition(all_params)
     return _PINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, model_fns)
@@ -752,7 +752,7 @@ class PINNTrainer(_Trainer):
         # define unnorm function
         mu_, sd_ = c.decomposition_init_kwargs["unnorm"]
         unnorm_fn = lambda u: DIC_networks.unnorm(mu_, sd_, u)
-        model_fns = (domain.norm_fn, network.network_fn, unnorm_fn, problem.constraining_fn)
+        model_fns = (domain.norm_fn, network.network_fn, unnorm_fn)
 
         # common initialisation
         (optimiser, all_opt_states, optimiser_fn, loss_fn, key,
