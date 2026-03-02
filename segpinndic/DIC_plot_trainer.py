@@ -218,7 +218,7 @@ def _nonzero_minmax(arr):
     return np.min(arr_nz), np.max(arr_nz)
 
 
-def result_uv_strain_plot(u, v, ux, uy, vx, vy,
+def result_uv_strain_plot(u, v, exx, exy, eyy,
                           layout=[2,3], WH=[5,4],
                           save_dir=None, filename=None):
     """
@@ -226,11 +226,6 @@ def result_uv_strain_plot(u, v, ux, uy, vx, vy,
     [ u   v   empty ]
     [ exx eyy exy   ]
     """
-
-    # --- strain ---
-    exx = ux
-    eyy = vy
-    exy = (uy + vx) / 2
 
     # --- min/max (ignore zero) ---
     u_min, u_max = _nonzero_minmax(u)
