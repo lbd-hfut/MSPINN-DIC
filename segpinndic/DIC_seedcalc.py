@@ -458,7 +458,7 @@ def iterativesearch_py(
             defv = defv0
             for iter in range(max_iter):
                 defv, diffnorm, corr, ok = newton_step(
-                    defv, BufferManager.QKBQKT_ref,
+                    defv, BufferManager.QKBQKT_def_seed,
                     xc, yc, dx, dy, mask,
                     f, fm, deltaf_inv,
                     df_dp, cholesky_G, lambda_reg
@@ -473,7 +473,7 @@ def iterativesearch_py(
 
 @jax.jit
 def newton_step(
-    defv, QKBQKT_ref,
+    defv, QKBQKT_def_seed,
     xc, yc, dx, dy, mask,
     f, fm, deltaf_inv,
     df_dp, cholesky_G, lambda_reg
@@ -484,7 +484,7 @@ def newton_step(
     Xw = xc + dx + u
     Yw = yc + dy + v
 
-    g, oob = interpqbs(Xw, Yw, QKBQKT_ref)
+    g, oob = interpqbs(Xw, Yw, QKBQKT_def_seed)
 
     gm = jnp.sum(g) / (jnp.sum(mask))
     diffg = (g - gm)
@@ -515,8 +515,8 @@ def newton_step(
 # B-spline 插值
 # -------------------------
 @jax.jit
-def interpqbs(xs, ys, QKBQKT_ref):
-    H, W = QKBQKT_ref.shape[:2]
+def interpqbs(xs, ys, QKBQKT_def_seed):
+    H, W = QKBQKT_def_seed.shape[:2]
 
     xs_floor = jnp.floor(xs).astype(jnp.int32)
     ys_floor = jnp.floor(ys).astype(jnp.int32)
@@ -529,7 +529,7 @@ def interpqbs(xs, ys, QKBQKT_ref):
     ys_floor = jnp.clip(ys_floor, 0, H - 1)
 
     # (N,6,6)
-    QK_B_QKT = QKBQKT_ref[ys_floor, xs_floor]
+    QK_B_QKT = QKBQKT_def_seed[ys_floor, xs_floor]
 
     xd = xs - xs_floor
     yd = ys - ys_floor
@@ -675,7 +675,7 @@ if __name__ == "__main__":
         print(f"umin: {jnp.min(seed_uv[i][:,0])}, v_min: {jnp.min(seed_uv[i][:,1])}")
     # savemat("buffer1.mat", 
     #         {
-    #             "QKBQKT_ref": BufferManager.QKBQKT_ref,
+    #             "QKBQKT_def_seed": BufferManager.QKBQKT_def_seed,
     #             "fx": BufferManager.fx,
     #             "fy": BufferManager.fy,
     #             "QK": BufferManager.SEED_QK,
