@@ -234,7 +234,7 @@ class ImgDataset:
     @staticmethod
     def open_image(name):
         img = Image.open(name).convert("L")
-        return jnp.array(img, dtype=jnp.float32)/255.0
+        return jnp.array(img, dtype=jnp.float32)
     
 if __name__ == "__main__":
     
