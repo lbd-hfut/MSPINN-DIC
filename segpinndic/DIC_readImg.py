@@ -161,8 +161,10 @@ def build_DIC_buffer_jax(img, degree=5):
     logger.info("precomputing seed buffers: QKBQKT_def")
     BufferManager.QKBQKT_def_seed = get_QK_B_QKT(plot_bcoef, img, degree=5, QK=BufferManager.DIC_QK)
     logger.info("precomputing DIC buffers: QKBQKT_def")
-    BufferManager.QKBQKT_def_DIC = get_QK_B_QKT(plot_bcoef, img, degree, QK=BufferManager.DIC_QK)
-    
+    if degree != 5:
+        BufferManager.QKBQKT_def_DIC = get_QK_B_QKT(plot_bcoef, img, degree, QK=BufferManager.DIC_QK)
+    else:
+        BufferManager.QKBQKT_def_DIC = BufferManager.QKBQKT_def_seed
     
 class ImgDataset:
     def __init__(self, DIC_config, Seed_config):
