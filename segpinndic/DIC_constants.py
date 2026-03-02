@@ -29,16 +29,21 @@ class ConstantsBase:
     @property
     def mat_out_dir(self):
         return f"{self.reslut_dir}/mats/{self.run}/"
+    @property
+    def fig_out_dir(self):
+        return f"{self.reslut_dir}/figs/{self.run}/"
 
     def get_outdirs(self):
         io.get_dir(self.summary_out_dir)
         io.get_dir(self.model_out_dir)
         io.get_dir(self.mat_out_dir)
+        io.get_dir(self.fig_out_dir)
         
     def clear_outdirs(self):
         io.clear_dir(self.summary_out_dir)
         io.clear_dir(self.model_out_dir)
         io.clear_dir(self.mat_out_dir)
+        io.clear_dir(self.fig_out_dir)
 
     def save_constants_file(self):
         "Save a constants to file in self.summary_out_dir"
