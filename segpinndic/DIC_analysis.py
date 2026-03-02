@@ -1,4 +1,4 @@
-from segpinndic.DIC_importlib import os, pickle, jax, jnp, np, SummaryWriter
+from segpinndic.DIC_importlib import os, pickle, jax, jnp, np, SummaryWriter, savemat
 
 from segpinndic.DIC_config import seed_config_txt, DIC_config_txt
 from segpinndic.DIC_readImg import BufferManager, ImgDataset
@@ -85,6 +85,14 @@ def main(
                 eyy = eyy.at[ys, xs].set(eyy_.flatten())
         u, v, exx, exy, eyy = np.asarray(u), np.asarray(v), \
             np.asarray(exx), np.asarray(exy), np.asarray(eyy)
+        save_mat_dir = c.mat_out_dir
+        save_mat_path = os.path.join(save_mat_dir, f"segpinndic_{i+1:03d}.mat")
+        savemat(
+            save_mat_path,
+            {
+                "u": u, "v": v, "exx": exx, "exy": exy, "eyy": eyy,
+            }
+        )
         if DIC_config.save_figures:
             save_fig_dir = c.fig_out_dir
             result_uv_strain_plot(
