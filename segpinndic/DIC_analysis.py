@@ -9,6 +9,7 @@ from segpinndic.utils.other import DictToObj
 from segpinndic.DIC_trainers import FBPINNTrainer, PINNTrainer
 from segpinndic.DIC_constants import Constants
 from segpinndic import DIC_networks
+from segpinndic.DIC_plot_trainer import result_uv_strain_plot
 
 def main(
     seed_config_path="./config/Seed_Configuration.txt",
@@ -48,7 +49,7 @@ def main(
             (jnp.max(a[:,1]) + jnp.min(a[:,1]))/2,
             (jnp.max(a[:,0]) - jnp.min(a[:,0]))/2,
             (jnp.max(a[:,1]) - jnp.min(a[:,1]))/2)) for a in seed_uv]
-        
+        u = v = exx = exy = eyy = jnp.zeros_like(BufferManager.refImg)
         for roi_id in range(N_roi):
             logger.info(f"Processing imgage pair {i+1}/{N_pairs} ROI {roi_id+1}/{N_roi}")
             c = constants_list[roi_id]
@@ -71,8 +72,25 @@ def main(
                     mask = BufferManager.mask[roi_id])
             )
             run = trainer(c)
-            run.train()
-        
+            _, u_, v_, exx_, exy_, eyy_, x_batch_global_ = run.train()
+            if N_roi == 1:
+                u, v, exx, exy, eyy = u_, v_, exx_, exy_, eyy_
+            else:
+                ys = x_batch_global_[:, 1].astype(jnp.int32)
+                xs = x_batch_global_[:, 0].astype(jnp.int32)
+                u = u.at[ys, xs].set(u_.flatten())
+                v = v.at[ys, xs].set(v_.flatten())
+                exx = exx.at[ys, xs].set(exx_.flatten())
+                exy = exy.at[ys, xs].set(exy_.flatten())
+                eyy = eyy.at[ys, xs].set(eyy_.flatten())
+        u, v, exx, exy, eyy = np.asarray(u), np.asarray(v), \
+            np.asarray(exx), np.asarray(exy), np.asarray(eyy)
+        if DIC_config.save_figures:
+            save_fig_dir = c.fig_out_dir
+            result_uv_strain_plot(
+                u, v, exx, exy, eyy,
+                save_dir=save_fig_dir, filename=f"result_{i+1:03d}.png"
+            )
             
             
 if __name__ == "__main__":
