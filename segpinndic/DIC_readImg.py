@@ -7,8 +7,8 @@ from segpinndic.utils.logger import logger
 class BufferManager:
     SEED_QK = None
     DIC_QK = None
-    QKBQKT_def = None
-    QKBQKT_ref = None
+    QKBQKT_def_seed = None
+    QKBQKT_def_DIC = None
     fx = None
     fy = None
     refImg = None
@@ -154,14 +154,14 @@ def build_seed_buffer_jax(img, mask, degree=5):
     logger.info("precomputing seed buffers: gradients")
     BufferManager.fx, BufferManager.fy = image_gradient_from_bcoef(
         plot_bcoef, mask, degree, QK=BufferManager.SEED_QK)
-    logger.info("precomputing seed buffers: QKBQKT_ref")
-    BufferManager.QKBQKT_ref = get_QK_B_QKT(plot_bcoef, img, degree, QK=BufferManager.SEED_QK)
-
+    
 def build_DIC_buffer_jax(img, degree=5):
     BufferManager.DIC_QK = get_QK(degree)
     plot_bcoef = form_bcoef(img, degree)
     logger.info("precomputing seed buffers: QKBQKT_def")
-    BufferManager.QKBQKT_def = get_QK_B_QKT(plot_bcoef, img, degree, QK=BufferManager.DIC_QK)
+    BufferManager.QKBQKT_def_seed = get_QK_B_QKT(plot_bcoef, img, degree=5, QK=BufferManager.DIC_QK)
+    logger.info("precomputing DIC buffers: QKBQKT_def")
+    BufferManager.QKBQKT_def_DIC = get_QK_B_QKT(plot_bcoef, img, degree, QK=BufferManager.DIC_QK)
     
     
 class ImgDataset:
