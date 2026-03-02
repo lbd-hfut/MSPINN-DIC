@@ -23,7 +23,7 @@ PINN_TEST
 ############################################
 
 # n_subdomains: 区域分割
-[4,4]
+[1,1]
 
 # train_schedulers: 训练方式 ["AllActiveSchedulerND", "PointSchedulerRectangularND", "LineSchedulerRectangularND"]
 AllActiveSchedulerND
