@@ -106,11 +106,18 @@ class Constants(ConstantsBase):
 
         # Define domain decomposition
         nx, ny = getattr(DICconfig, "n_subdomains", [4, 8])
-        self.subdomain_xs = [
-            np.linspace(xmin_roi, xmax_roi, nx), 
-            np.linspace(ymin_roi, ymax_roi, ny)
-            ]
-        self.subdomain_ws = get_subdomain_ws(self.subdomain_xs, 2.4)
+        if nx*ny == 1:
+            self.subdomain_xs = [
+                np.linspace(xmin_roi, xmax_roi, 5), 
+                np.linspace(ymin_roi, ymax_roi, 5)
+                ]
+            self.subdomain_ws = get_subdomain_ws(self.subdomain_xs, 2.4)
+        else:
+            self.subdomain_xs = [
+                np.linspace(xmin_roi, xmax_roi, nx), 
+                np.linspace(ymin_roi, ymax_roi, ny)
+                ]
+            self.subdomain_ws = get_subdomain_ws(self.subdomain_xs, 2.4)
         self.decomposition = DIC_decompositions.RectangularDecompositionND
         self.decomposition_init_kwargs = dict(
             subdomain_xs=self.subdomain_xs,
