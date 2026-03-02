@@ -168,11 +168,6 @@ def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
 
     # take x_batch
     x_take = x_batch[n_take]# (s, xd)
-    # log_ = logger.info if verbose else logger.debug
-    # log_("x_batch")
-    # log_(str_tensor(x_batch))# (n, xd)
-    # log_("x_take")
-    # log_(str_tensor(x_take))
 
     # take subdomain params
     d = all_params
@@ -196,28 +191,20 @@ def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
         }
         for t_k in ["static", "trainable"]
     }
-    # logger.debug("all_params")
+
     logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params))
-    # logger.debug("all_params_take")
     logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params_take))
-    # logger.debug("vmap f")
-    # logger.debug(f)
 
     # batch over parameters and points
     us, ws, us_raw = vmap(FBPINN_model_inner, in_axes=(f,0,None,None,None,None))(all_params_take, x_take, norm_fn, network_fn, unnorm_fn, window_fn)# (s, ud)
-    # logger.debug("u")
-    # logger.debug(str_tensor(us))
 
     # apply POU and sum
     u = jnp.concatenate([us, ws], axis=1)# (s, ud+1)
     u = jax.ops.segment_sum(u, p_take, indices_are_sorted=False, num_segments=len(np_take))# (_, ud+1)
     wp = u[:,-1:]
     u = u[:,:-1]/wp
-    # logger.debug(str_tensor(u))
     u = jax.ops.segment_sum(u, np_take, indices_are_sorted=False, num_segments=len(x_batch))# (n, ud)
-    # logger.debug(str_tensor(u))
     u = u/npou
-    # logger.debug(str_tensor(u))
 
     return u, wp, us, ws, us_raw
 
@@ -225,15 +212,8 @@ def PINN_model(all_params, x_batch, model_fns, verbose=True):
     "Defines PINN model"
 
     norm_fn, network_fn, unnorm_fn = model_fns
-    # log_ = logger.info if verbose else logger.debug
-    # log_("x_batch")
-    # log_(str_tensor(x_batch))# (n, xd)
-
     # batch over parameters and points
     u, u_raw = vmap(PINN_model_inner, in_axes=(None,0,None,None,None))(all_params, x_batch, norm_fn, network_fn, unnorm_fn)# (n, ud)
-    # logger.debug("u")
-    # logger.debug(str_tensor(u))
-
     return u, u_raw
 
 def FBPINN_forward(all_params, x_batch, takes, model_fns):
@@ -357,7 +337,7 @@ def PINN_update(optimiser_fn, active_opt_states,
 def _FBPINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, takes, model_fns):
     all_params = combine(all_params_dynamic, all_params_static)
     return FBPINN_predict_forward(all_params, x_batch, takes, model_fns, jmaps)
-def FBPINN_model_jit(all_params, x_batch, jmaps, takes, model_fns):
+def FBPINN_predict_jit(all_params, x_batch, jmaps, takes, model_fns):
     all_params_dynamic, all_params_static = partition(all_params)
     return _FBPINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, takes, model_fns)
 
@@ -722,7 +702,7 @@ class FBPINNTrainer(_Trainer):
             static_params = cut_all(all_params["static"])
             all_params_ = {"static":static_params, "trainable":trainable_params}
             
-            ujs = FBPINN_model_jit(all_params_, x_batch, jmaps, takes, model_fns)
+            ujs = FBPINN_predict_jit(all_params_, x_batch, jmaps, takes, model_fns)
             u_, v_, ux_, uy_, vx_, vy_ = ujs
             exx_, exy_, eyy_ = ux_, (uy_+vx_)/2, vy_
             ys = x_batch[:, 1].astype(jnp.int32)
@@ -793,7 +773,8 @@ class PINNTrainer(_Trainer):
                                    x_batch, model_fns, loss_fn).compile()
         logger.info(f"[i: {0}/{self.c.n_steps}] Compiling done ({time.time()-startc:.2f} s)")
         cost_ = update.cost_analysis()
-        p,f = total_size(active_params["network"]), cost_[0]["flops"] if (cost_ and "flops" in cost_[0]) else 0
+        p = total_size(active_params["network"])
+        f = cost_.get("flops", 0) if cost_ else 0
         logger.debug("p, f")
         logger.debug((p,f))
 
@@ -832,9 +813,9 @@ class PINNTrainer(_Trainer):
         all_params["trainable"] = active_params
         all_opt_states = active_opt_states
 
+        u, v, exx, exy, eyy = self._predict(all_params, x_batch_global, jmaps, model_fns)
         
-        
-        return all_params
+        return all_params, u, v, exx, exy, eyy, x_batch_global
 
     def _report(self, i, start0, start1, report_time,
                 all_params, all_opt_states,
@@ -845,7 +826,12 @@ class PINNTrainer(_Trainer):
         c = self.c
         summary_,test_,model_save_ = [(i % f == 0) for f in
                                       [c.summary_freq, c.test_freq, c.model_save_freq]]
-        if summary_ or test_ or model_save_:
+        if lossval is None:
+            loss_val = None
+        else:
+            loss_val = lossval.item()
+            
+        if summary_ or model_save_:
 
             # print summary
             if i != 0 and summary_:
@@ -853,20 +839,58 @@ class PINNTrainer(_Trainer):
                 self._print_summary(i, lossval.item(), rate, start0)
                 start1, report_time = time.time(), 0.
 
-            if model_save_:
+            if i != 0 and model_save_:
 
                 start2 = time.time()
 
                 # merge latest params
                 all_params["trainable"] = active_params
                 all_opt_states = active_opt_states
-
-                # save model
-                if model_save_:
-                    self._save_model(i, (i, all_params, all_opt_states, jnp.array(lossval.item())))
+                
+                self._save_model(i, (i, all_params, all_opt_states, jnp.array(loss_val) if loss_val is not None else jnp.array(jnp.nan)))
 
                 report_time += time.time()-start2
 
-        return lossval.item(), start1, report_time
+        return lossval, start1, report_time
+    
+    def _predict(self, all_params, x_batch_global, jmaps, model_fns):
+        if x_batch_global.shape[0] > 512**2:
+            batch_size = 512**2
+            r = x_batch_global.shape[0]%batch_size
+            shift = batch_size-r if r else 0
+            irange = jnp.arange(0, x_batch_global.shape[0], batch_size)# (k)
+            irange = irange.at[-1].add(-shift)
+            
+            def take_batch(i):
+                return jax.lax.dynamic_slice(
+                    x_batch_global,
+                    (i, 0),
+                    (batch_size, x_batch_global.shape[1])
+                )
+            
+            x_batches = jax.vmap(take_batch)(irange)   # (m, batch_size, 2)
+        else:
+            batch_size = x_batch_global.shape[0]
+            x_batches = x_batch_global[None, ...]   # (1, batch_size, 2)
+            
+        u = v = exx = exy = eyy = jnp.zeros_like(all_params["static"]["problem"]["ref_img"])
+        
+        for i, x_batch in enumerate(x_batches):
+            x_batch = x_batch.astype(jnp.float32)
+            logger.info(f"Predicting on batch {i+1}/{x_batches.shape[0]}..")
+            
+            ujs = PINN_predict_jit(all_params, x_batch, jmaps, model_fns)
+            u_, v_, ux_, uy_, vx_, vy_ = ujs
+            exx_, exy_, eyy_ = ux_, (uy_+vx_)/2, vy_
+            ys = x_batch[:, 1].astype(jnp.int32)
+            xs = x_batch[:, 0].astype(jnp.int32)
+            u = u.at[ys, xs].set(u_.flatten())
+            v = v.at[ys, xs].set(v_.flatten())
+            exx = exx.at[ys, xs].set(exx_.flatten())
+            exy = exy.at[ys, xs].set(exy_.flatten())
+            eyy = eyy.at[ys, xs].set(eyy_.flatten())
+        return u, v, exx, exy, eyy
+            
+            
     
     
