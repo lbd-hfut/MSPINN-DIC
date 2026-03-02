@@ -31,6 +31,7 @@ import scipy.io as sio
 from scipy.io import loadmat
 from scipy.io import savemat
 from matplotlib import pyplot as plt
+import matplotlib
 import matplotlib.collections as mcoll
 import IPython.display
 from tensorboardX import SummaryWriter
