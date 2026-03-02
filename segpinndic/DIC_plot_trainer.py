@@ -1,6 +1,7 @@
 from segpinndic.DIC_importlib import jax, jnp, np, plt, matplotlib, plt, os
 
 from segpinndic.utils.other import colors
+from segpinndic.utils.logger import logger
 
 def _lim(v, factor=1.1):
     mi, ma = v.min(0), v.max(0)
@@ -295,5 +296,5 @@ def result_uv_strain_plot(u, v, ux, uy, vx, vy,
         os.makedirs(save_dir)
     file_path = os.path.join(save_dir, filename)
     plt.savefig(file_path, bbox_inches='tight')
-    
+    logger.info(f"Result figure saved to {file_path}")
     plt.close()
