@@ -651,7 +651,7 @@ class FBPINNTrainer(_Trainer):
 
         u, v, exx, exy, eyy = self._predict(all_params, decomposition, x_batch_global, jmaps, model_fns)
         
-        return all_params, u, v, exx, exy, eyy
+        return all_params, u, v, exx, exy, eyy, x_batch_global
 
     def _report(self, i, start0, start1, report_time,
                 all_params, all_opt_states,
