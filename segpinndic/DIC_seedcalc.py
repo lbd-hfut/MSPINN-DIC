@@ -644,6 +644,7 @@ def Seed_match_visualization(refImg, defImg, xy, uv, output_dir, basename, idx):
 if __name__ == "__main__":
     from segpinndic.DIC_config import seed_config_txt, DIC_config_txt
     from segpinndic.DIC_readImg import ImgDataset
+    from scipy.io import savemat
     seed_config_path = "./config/Seed_Configuration.txt"
     dic_config_path = "./config/PINN-DIC-2D.txt"
 
@@ -672,4 +673,13 @@ if __name__ == "__main__":
         print(f"roi_{i} scale uv: {scale_uv}")
         print(f"umax: {jnp.max(seed_uv[i][:,0])}, v_max: {jnp.max(seed_uv[i][:,1])}")
         print(f"umin: {jnp.min(seed_uv[i][:,0])}, v_min: {jnp.min(seed_uv[i][:,1])}")
+    # savemat("buffer1.mat", 
+    #         {
+    #             "QKBQKT_ref": BufferManager.QKBQKT_ref,
+    #             "fx": BufferManager.fx,
+    #             "fy": BufferManager.fy,
+    #             "QK": BufferManager.SEED_QK,
+    #         }
+    #     )
+    
     
