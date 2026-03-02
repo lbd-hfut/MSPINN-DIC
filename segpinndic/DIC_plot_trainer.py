@@ -1,4 +1,4 @@
-from segpinndic.DIC_importlib import jax, jnp, np, plt
+from segpinndic.DIC_importlib import jax, jnp, np, plt, matplotlib, plt, os
 
 from segpinndic.utils.other import colors
 
@@ -204,3 +204,96 @@ def plot(trainer, dims, *args):
         return _plotters[trainer][nx](*args)
     else:
         return ()# TODO: add higher-dim plots
+    
+def zero_to_nan(matrix):
+    matrix = np.array(matrix)
+    matrix[matrix == 0] = np.nan
+    return matrix
+
+def _nonzero_minmax(arr):
+    arr_nz = arr[arr != 0]
+    if arr_nz.size == 0:
+        return None, None
+    return np.min(arr_nz), np.max(arr_nz)
+
+
+def result_uv_strain_plot(u, v, ux, uy, vx, vy,
+                          layout=[2,3], WH=[5,4],
+                          save_dir=None, filename=None):
+    """
+    layout:
+    [ u   v   empty ]
+    [ exx eyy exy   ]
+    """
+
+    # --- strain ---
+    exx = ux
+    eyy = vy
+    exy = (uy + vx) / 2
+
+    # --- min/max (ignore zero) ---
+    u_min, u_max = _nonzero_minmax(u)
+    v_min, v_max = _nonzero_minmax(v)
+    exxmin, exxmax = _nonzero_minmax(exx)
+    eyymin, eyymax = _nonzero_minmax(eyy)
+    exymin, exymax = _nonzero_minmax(exy)
+
+    # --- zero -> nan ---
+    u = zero_to_nan(u)
+    v = zero_to_nan(v)
+    exx = zero_to_nan(exx)
+    eyy = zero_to_nan(eyy)
+    exy = zero_to_nan(exy)
+
+    # --- figure ---
+    plt.figure(figsize=(WH[1]*layout[1], WH[0]*layout[0]), dpi=200)
+
+    normu   = matplotlib.colors.Normalize(vmin=u_min,   vmax=u_max)
+    normv   = matplotlib.colors.Normalize(vmin=v_min,   vmax=v_max)
+    normexx = matplotlib.colors.Normalize(vmin=exxmin, vmax=exxmax)
+    normeyy = matplotlib.colors.Normalize(vmin=eyymin, vmax=eyymax)
+    normexy = matplotlib.colors.Normalize(vmin=exymin, vmax=exymax)
+
+    # ===== Row 1: displacement =====
+    plt.subplot(layout[0], layout[1], 1)
+    plt.imshow(u, cmap='jet', interpolation='nearest', norm=normu)
+    plt.colorbar()
+    plt.title("u", fontsize=10)
+    plt.axis('off')
+
+    plt.subplot(layout[0], layout[1], 2)
+    plt.imshow(v, cmap='jet', interpolation='nearest', norm=normv)
+    plt.colorbar()
+    plt.title("v", fontsize=10)
+    plt.axis('off')
+
+    # 第3个位置留空
+    plt.subplot(layout[0], layout[1], 3)
+    plt.axis('off')
+
+    # ===== Row 2: strain =====
+    plt.subplot(layout[0], layout[1], 4)
+    plt.imshow(exx, cmap='jet', interpolation='nearest', norm=normexx)
+    plt.colorbar()
+    plt.title("exx", fontsize=10)
+    plt.axis('off')
+
+    plt.subplot(layout[0], layout[1], 5)
+    plt.imshow(eyy, cmap='jet', interpolation='nearest', norm=normeyy)
+    plt.colorbar()
+    plt.title("eyy", fontsize=10)
+    plt.axis('off')
+
+    plt.subplot(layout[0], layout[1], 6)
+    plt.imshow(exy, cmap='jet', interpolation='nearest', norm=normexy)
+    plt.colorbar()
+    plt.title("exy", fontsize=10)
+    plt.axis('off')
+
+    # --- save ---
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    file_path = os.path.join(save_dir, filename)
+    plt.savefig(file_path, bbox_inches='tight')
+    
+    plt.close()
