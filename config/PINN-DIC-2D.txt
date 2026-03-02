@@ -23,7 +23,7 @@ PINN_TEST
 ############################################
 
 # n_subdomains: 区域分割
-[4,8]
+[4,4]
 
 # train_schedulers: 训练方式 ["AllActiveSchedulerND", "PointSchedulerRectangularND", "LineSchedulerRectangularND"]
 AllActiveSchedulerND
@@ -45,7 +45,7 @@ DIC_MSE
 ############################################
 
 # adam_epochs: Adam轮数
-1000
+1
 
 # seed_flag: 判断是否使用种子点，使用的话请配置“Seed_Configuration.txt”
 True
