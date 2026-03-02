@@ -68,7 +68,7 @@ def main(
                     unnorm=(mu, sd)),
                 problem_init_kwargs=dict(
                     ref_img = BufferManager.refImg,
-                    QKBQKT_def = BufferManager.QKBQKT_def,
+                    QKBQKT_def = BufferManager.QKBQKT_def_DIC,
                     mask = BufferManager.mask[roi_id])
             )
             run = trainer(c)
