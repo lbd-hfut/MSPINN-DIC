@@ -32,7 +32,7 @@ AllActiveSchedulerND
 [32]
 
 # network: 神经网络 ["FCN", "AdaptiveFCN", "SIREN", "AdaptiveSIREN"]
-AdaptiveFCN
+AdaptiveSIREN
 
 # spline_degree: 插值方法 [1, 3, 5]
 5
