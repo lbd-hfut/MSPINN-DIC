@@ -90,9 +90,10 @@ class SIREN(FCN):
         "Create a random layer parameters"
 
         w_key, b_key = random.split(key)
-        v = jnp.sqrt(6/m)
+        v = jnp.sqrt(1/m)
         w = random.uniform(w_key, (n, m), minval=-v, maxval=v)
-        b = random.uniform(b_key, (n,), minval=-v, maxval=v)
+        # b = random.uniform(b_key, (n,), minval=-v, maxval=v)
+        b = jnp.zeros((n,))
         return w,b
 
     @staticmethod
@@ -121,9 +122,10 @@ class AdaptiveSIREN(Network):
         "Create a random layer parameters"
 
         w_key, b_key = random.split(key)
-        v = jnp.sqrt(6/m)
+        v = jnp.sqrt(1/m)
         w = random.uniform(w_key, (n, m), minval=-v, maxval=v)
-        b = random.uniform(b_key, (n,), minval=-v, maxval=v)
+        # b = random.uniform(b_key, (n,), minval=-v, maxval=v)
+        b = jnp.zeros((n,))
         c,o = jnp.ones_like(b), jnp.ones_like(b)
         return w,b,c,o
 
