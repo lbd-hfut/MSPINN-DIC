@@ -1,5 +1,5 @@
 import jax.nn
-from segpinndic.DIC_importlib import jnp, np
+from segpinndic.DIC_importlib import jnp, np, jax
 from segpinndic.utils.logger import logger
 
 class Problem:
@@ -79,8 +79,8 @@ class DIC_MSE(Problem):
         # warp defimg
         H, W = QKBQKT_def.shape[:2]
 
-        xs_floor = jnp.floor(xs).astype(jnp.int32)
-        ys_floor = jnp.floor(ys).astype(jnp.int32)
+        xs_floor = jax.lax.stop_gradient(jnp.floor(xs)).astype(jnp.int32)
+        ys_floor = jax.lax.stop_gradient(jnp.floor(ys)).astype(jnp.int32)
 
         xs_oob = (xs_floor < 0) | (xs_floor >= W)
         ys_oob = (ys_floor < 0) | (ys_floor >= H)
