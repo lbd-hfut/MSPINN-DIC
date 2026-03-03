@@ -42,12 +42,13 @@ class DIC_MSE(Problem):
     """DIC problem class with MSE loss function"""
 
     @staticmethod
-    def init_params(ref_img, QKBQKT_def, mask):
+    def init_params(ref_img, QKBQKT_def, mask, degree):
         static_params = {
             "dims":(2,2),
             "QKBQKT_def": QKBQKT_def,
             "ref_img": ref_img,
             "mask": mask,
+            "degree": degree,
         }
         return static_params, {}
     
@@ -69,6 +70,7 @@ class DIC_MSE(Problem):
     def loss_fn(all_params, x_batch, uv):
         ref_img = all_params["static"]["problem"]["ref_img"]
         QKBQKT_def = all_params["static"]["problem"]["QKBQKT_def"]
+        degree = all_params["static"]["problem"]["degree"]
         u, v = uv[:,0], uv[:,1]
 
         xref, yref = x_batch[:,0], x_batch[:,1]
@@ -93,7 +95,7 @@ class DIC_MSE(Problem):
         xd = xs - xs_floor
         yd = ys - ys_floor
 
-        powers = jnp.arange(6)
+        powers = jnp.arange(degree+1)
         x_vec = xd[:, None] ** powers[None, :]
         y_vec = yd[:, None] ** powers[None, :]
 
