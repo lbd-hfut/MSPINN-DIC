@@ -209,6 +209,7 @@ __marimo__/
 .vscode/
 
 # case dir
+case/**/*.m
 case/**/*.mat
 case/**/*.png
 case/**/results/models/

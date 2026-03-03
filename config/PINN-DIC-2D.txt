@@ -20,7 +20,7 @@ C:/01project/SegPINN-DIC/case/case9/results
 ############################################
 
 # n_subdomains: 区域分割
-[4, 4]
+[8, 8]
 
 # train_schedulers: 训练方式 ["AllActiveSchedulerND", "PointSchedulerRectangularND", "LineSchedulerRectangularND"]
 AllActiveSchedulerND
@@ -55,7 +55,7 @@ True
 ############################################
 
 # adam_lr: Adam预热学习率
-0.05
+0.01
 
 # adam_betas: Adam动量参数(beta1, beta2)
 [0.9, 0.999]
