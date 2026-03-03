@@ -11,9 +11,6 @@ C:/01project/SegPINN-DIC/case/case9/image
 # output_dir: 结果输出文件夹路径
 C:/01project/SegPINN-DIC/case/case9/results
 
-# run: 项目名称
-SegPINN_TEST
-
 ############################################
 # 🧠 网络结构参数（一般偶尔改）
 # hidden_units为PINN-DIC隐藏层神经元数目列表，控制网络宽度。
