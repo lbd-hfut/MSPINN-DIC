@@ -102,6 +102,7 @@ class Constants(ConstantsBase):
             ref_img = None,
             QKBQKT_def = None,
             mask = None,
+            degree = 5,
         )
 
         # Define domain decomposition
