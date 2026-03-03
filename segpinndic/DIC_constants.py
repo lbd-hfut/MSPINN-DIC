@@ -65,8 +65,6 @@ class Constants(ConstantsBase):
 
         # Define results directories
         self.reslut_dir = DICconfig.output_dir
-        # Define run
-        self.run = getattr(DICconfig, "run", "PINN")
         
         # image shape
         self.roi_id = roi_id
@@ -162,6 +160,14 @@ class Constants(ConstantsBase):
 
         # other constants
         self.hostname = socket.gethostname().lower()
+        
+        # Define run
+        if nx*ny == 1:
+            run = "PINN"
+            self.run = run + "_" + net_name + "_" + loss_name
+        else:
+            run = "SegPINN"
+            self.run = run + "_" + net_name + "_" + f"{nx}x{ny}" + "_" + loss_name
 
     def load_kwargs(self, **kwargs):
         # overwrite with input arguments
