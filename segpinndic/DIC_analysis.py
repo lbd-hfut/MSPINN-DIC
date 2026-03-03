@@ -72,7 +72,8 @@ def main(
                 problem_init_kwargs=dict(
                     ref_img = BufferManager.refImg,
                     QKBQKT_def = BufferManager.QKBQKT_def_DIC,
-                    mask = BufferManager.mask[roi_id])
+                    mask = BufferManager.mask[roi_id],
+                    degree = DIC_config.spline_degree)
             )
             run = trainer(c)
             _, u_, v_, exx_, exy_, eyy_, x_batch_global_ = run.train()
