@@ -171,12 +171,12 @@ class ImgDataset:
         logger.info(f"Scanning directory for images: {DIC_config.input_dir}")
         image_files = np.array([
             x.path for x in os.scandir(DIC_config.input_dir)
-            if x.name.lower().endswith((".bmp", ".png", ".jpg", ".tiff"))
+            if x.name.lower().endswith((".bmp", ".png", ".jpg", ".tiff", ".tif"))
         ])
         if image_files.size == 0:
             raise FileNotFoundError(
                 f"[ERROR] No image files found in directory: {DIC_config.input_dir} "
-                "(supported: .bmp, .png, .jpg, .tiff)"
+                "(supported: .bmp, .png, .jpg, .tiff, .tif)"
             )
         image_files.sort()
         
