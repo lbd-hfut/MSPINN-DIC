@@ -6,10 +6,10 @@
 ############################################
 
 # input_dir: 输入图像所在的文件夹路径
-C:/01project/SegPINN-DIC/case/case9/image
+C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise
 
 # output_dir: 结果输出文件夹路径
-C:/01project/SegPINN-DIC/case/case9/results
+C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise/results
 
 ############################################
 # 🧠 网络结构参数（一般偶尔改）
@@ -20,7 +20,7 @@ C:/01project/SegPINN-DIC/case/case9/results
 ############################################
 
 # n_subdomains: 区域分割
-[8, 8]
+[8, 32]
 
 # train_schedulers: 训练方式 ["AllActiveSchedulerND", "PointSchedulerRectangularND", "LineSchedulerRectangularND"]
 AllActiveSchedulerND
@@ -42,7 +42,7 @@ DIC_MSE
 ############################################
 
 # adam_epochs: Adam轮数
-300
+2500
 
 # seed_flag: 判断是否使用种子点，使用的话请配置“Seed_Configuration.txt”
 True
