@@ -20,7 +20,7 @@ C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise/results
 ############################################
 
 # n_subdomains: 区域分割
-[8, 32]
+[32, 8]
 
 # train_schedulers: 训练方式 ["AllActiveSchedulerND", "PointSchedulerRectangularND", "LineSchedulerRectangularND"]
 AllActiveSchedulerND
@@ -42,7 +42,7 @@ DIC_MSE
 ############################################
 
 # adam_epochs: Adam轮数
-2500
+4000
 
 # seed_flag: 判断是否使用种子点，使用的话请配置“Seed_Configuration.txt”
 True
