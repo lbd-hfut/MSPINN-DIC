@@ -141,11 +141,14 @@ class Constants(ConstantsBase):
         self.scheduler = getattr(DIC_schedulers, scheduler_name)
         if scheduler_name == "AllActiveSchedulerND":
             self.scheduler_kwargs = dict()
+            scheduler_rename = "All" 
         elif scheduler_name == "PointSchedulerRectangularND":
             self.scheduler_kwargs = dict(
                 point=np.array([(xmin_roi+xmax_roi)/2, (ymin_roi+ymax_roi)/2])
             )
+            scheduler_rename = "Point"
         elif scheduler_name == "LineSchedulerRectangularND":
+            scheduler_rename = "Line"
             if nx < ny:
                 self.scheduler_kwargs = dict(
                     point=np.array([xmin_roi]),
@@ -179,11 +182,9 @@ class Constants(ConstantsBase):
         
         # Define run
         if nx*ny == 1:
-            run = "PINN"
-            self.run = run + "_" + net_name + "_" + loss_name
+            self.run = net_name + "_" + loss_name
         else:
-            run = "SegPINN"
-            self.run = run + "_" + net_name + "_" + f"{nx}x{ny}" + "_" + loss_name
+            self.run = net_name + "_" + scheduler_rename + "_" + f"{nx}x{ny}"  + "_" + loss_name
 
     def load_kwargs(self, **kwargs):
         # overwrite with input arguments
