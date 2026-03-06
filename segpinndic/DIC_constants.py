@@ -139,7 +139,23 @@ class Constants(ConstantsBase):
         if not hasattr(DIC_schedulers, scheduler_name):
             raise ValueError(f"Unknown scheduler: {scheduler_name}")
         self.scheduler = getattr(DIC_schedulers, scheduler_name)
-        self.scheduler_kwargs = dict()
+        if scheduler_name == "AllActiveSchedulerND":
+            self.scheduler_kwargs = dict()
+        elif scheduler_name == "PointSchedulerRectangularND":
+            self.scheduler_kwargs = dict(
+                point=np.array([(xmin_roi+xmax_roi)/2, (ymin_roi+ymax_roi)/2])
+            )
+        elif scheduler_name == "LineSchedulerRectangularND":
+            if nx < ny:
+                self.scheduler_kwargs = dict(
+                    point=np.array([xmin_roi]),
+                    iaxis=1
+                )
+            else:
+                self.scheduler_kwargs = dict(
+                    point=np.array([ymin_roi]),
+                    iaxis=0
+                )
 
         # Define optimisation parameters
         self.ns = ((1,),)# batch_shape for placeholder
