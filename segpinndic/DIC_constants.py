@@ -149,7 +149,7 @@ class Constants(ConstantsBase):
             scheduler_rename = "Point"
         elif scheduler_name == "LineSchedulerRectangularND":
             scheduler_rename = "Line"
-            if nx < ny:
+            if nx > ny:
                 self.scheduler_kwargs = dict(
                     point=np.array([xmin_roi]),
                     iaxis=1
