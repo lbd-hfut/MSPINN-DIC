@@ -96,6 +96,57 @@ class ResNet(Network):
             outputs.append(y_i)
         y = sum(outputs) / len(outputs)
         return y
+    
+class AdaptiveResNet(Network):
+
+    @staticmethod
+    def init_params(key, layer_sizes):
+
+        keys = random.split(key, len(layer_sizes)-1)
+        out_dim = layer_sizes[-1]
+        
+        params = [
+            AdaptiveResNet._random_layer_params(k, m, n, out_dim)
+            for k, m, n in zip(keys, layer_sizes[:-1], layer_sizes[1:])
+        ]
+        trainable_params = {"layers": params}
+
+        return {}, trainable_params
+
+
+    @staticmethod
+    def _random_layer_params(key, m, n, out_dim):
+
+        k1, k2 = random.split(key)
+        v = jnp.sqrt(1.0 / m)
+        # hidden layer
+        w = random.uniform(k1, (n, m), minval=-v, maxval=v)
+        b = jnp.zeros((n,))
+        a = jnp.ones_like(b)
+        # residual output head
+        w_out = random.uniform(k2, (out_dim, n), minval=-v, maxval=v)
+        b_out = jnp.zeros((out_dim,))
+        a_out = jnp.ones_like(b)
+        return w, b, a, w_out, b_out, a_out
+
+
+    @staticmethod
+    def network_fn(params, x):
+
+        params = params["trainable"]["network"]["subdomain"]["layers"]
+        h = x
+        outputs = []
+        for i, (w, b, a, w_out, b_out, a_out) in enumerate(params):
+            h = jnp.dot(w, h) + b
+            
+            if i < len(params)-1:
+                h = jnp.tanh(h)
+                h = a * h
+            y_i = jnp.dot(w_out, h) + b_out
+            y_i = a_out * y_i
+            outputs.append(y_i)
+        y = sum(outputs) / len(outputs)
+        return y
 
 class AdaptiveFCN(Network):
 
