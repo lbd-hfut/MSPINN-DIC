@@ -79,7 +79,7 @@ class ResNet(Network):
         # residual output head
         w_out = random.uniform(k2, (out_dim, n), minval=-v, maxval=v)
         b_out = jnp.zeros((out_dim,))
-        return w, b
+        return w, b, w_out, b_out
 
 
     @staticmethod
