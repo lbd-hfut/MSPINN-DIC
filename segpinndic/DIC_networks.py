@@ -50,6 +50,52 @@ class FCN(Network):
         w, b = params[-1]
         x = jnp.dot(w, x) + b
         return x
+    
+class ResNet(Network):
+
+    @staticmethod
+    def init_params(key, layer_sizes):
+
+        keys = random.split(key, len(layer_sizes)-1)
+        out_dim = layer_sizes[-1]
+        
+        params = [
+            ResNet._random_layer_params(k, m, n, out_dim)
+            for k, m, n in zip(keys, layer_sizes[:-1], layer_sizes[1:])
+        ]
+        trainable_params = {"layers": params}
+
+        return {}, trainable_params
+
+
+    @staticmethod
+    def _random_layer_params(key, m, n, out_dim):
+
+        k1, k2 = random.split(key)
+        v = jnp.sqrt(1.0 / m)
+        # hidden layer
+        w = random.uniform(k1, (n, m), minval=-v, maxval=v)
+        b = jnp.zeros((n,))
+        # residual output head
+        w_out = random.uniform(k2, (out_dim, n), minval=-v, maxval=v)
+        b_out = jnp.zeros((out_dim,))
+        return w, b
+
+
+    @staticmethod
+    def network_fn(params, x):
+
+        params = params["trainable"]["network"]["subdomain"]["layers"]
+        h = x
+        outputs = []
+        for i, (w, b, w_out, b_out) in enumerate(params):
+            h = jnp.dot(w, h) + b
+            if i < len(params)-1:
+                h = jnp.tanh(h)
+            y_i = jnp.dot(w_out, h) + b_out
+            outputs.append(y_i)
+        y = sum(outputs) / len(outputs)
+        return y
 
 class AdaptiveFCN(Network):
 
