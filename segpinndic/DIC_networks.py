@@ -126,7 +126,7 @@ class AdaptiveResNet(Network):
         # residual output head
         w_out = random.uniform(k2, (out_dim, n), minval=-v, maxval=v)
         b_out = jnp.zeros((out_dim,))
-        a_out = jnp.ones_like(out_dim,)
+        a_out = jnp.ones_like(b_out)
         return w, b, a, w_out, b_out, a_out
 
 
