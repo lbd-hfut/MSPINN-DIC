@@ -126,7 +126,7 @@ class AdaptiveResNet(Network):
         # residual output head
         w_out = random.uniform(k2, (out_dim, n), minval=-v, maxval=v)
         b_out = jnp.zeros((out_dim,))
-        a_out = jnp.ones_like(b)
+        a_out = jnp.ones_like(out_dim,)
         return w, b, a, w_out, b_out, a_out
 
 
@@ -145,7 +145,7 @@ class AdaptiveResNet(Network):
             y_i = jnp.dot(w_out, h) + b_out
             y_i = a_out * y_i
             outputs.append(y_i)
-        y = sum(outputs) / len(outputs)
+        y = jnp.mean(jnp.stack(outputs), axis=0)
         return y
 
 class AdaptiveFCN(Network):
