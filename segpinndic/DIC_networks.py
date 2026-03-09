@@ -51,28 +51,148 @@ class FCN(Network):
         x = jnp.dot(w, x) + b
         return x
     
+# class FourierNet(Network):
+
+#     @staticmethod
+#     def init_params(key, layer_sizes, mapping_size=64, scale=10.0):
+#         """
+#         layer_sizes example:
+#         [2,32,32,32,2]
+
+#         Actual network becomes:
+#         [2, mapping_size, 32, 32, 32, 2]
+#         """
+
+#         in_dim = layer_sizes[0]
+
+#         # split keys
+#         key_B, key_layers = random.split(key)
+
+#         # Fourier matrix
+#         B = random.normal(key_B, (mapping_size // 2, in_dim)) * scale
+
+#         # construct new layer sizes
+#         new_layer_sizes = [mapping_size] + layer_sizes[1:]
+
+#         keys = random.split(key_layers, len(new_layer_sizes)-1)
+
+#         params = [
+#             FourierNet._random_layer_params(k, m, n)
+#             for k, m, n in zip(keys, new_layer_sizes[:-1], new_layer_sizes[1:])
+#         ]
+
+#         static_params = {
+#             "fourier": {
+#                 "B": B
+#             }
+#         }
+
+#         trainable_params = {
+#             "layers": params
+#         }
+
+#         return static_params, trainable_params
+
+#     @staticmethod
+#     def _random_layer_params(key, m, n):
+
+#         w_key, b_key = random.split(key)
+
+#         v = jnp.sqrt(1/m)
+
+#         w = random.uniform(w_key, (n, m), minval=-v, maxval=v)
+#         b = random.uniform(b_key, (n,), minval=-v, maxval=v)
+
+#         return w, b
+
+#     @staticmethod
+#     def _fourier_feature(B, x):
+#         """
+#         x shape: (xd,)
+#         B shape: (mapping_size/2, xd)
+#         """
+
+#         x_proj = B @ x
+
+#         return jnp.concatenate(
+#             [jnp.sin(x_proj), jnp.cos(x_proj)],
+#             axis=0
+#         )
+
+#     @staticmethod
+#     def network_fn(params, x):
+
+#         B = params["static"]["network"]["fourier"]["B"]
+
+#         layers = params["trainable"]["network"]["subdomain"]["layers"]
+
+#         # Fourier mapping
+#         x = FourierNet._fourier_feature(B, x)
+
+#         # MLP
+#         for w, b in layers[:-1]:
+#             x = jnp.dot(w, x) + b
+#             x = jnp.tanh(x)
+
+#         w, b = layers[-1]
+
+#         x = jnp.dot(w, x) + b
+
+#         return x
+
 class FourierNet(Network):
 
     @staticmethod
-    def init_params(key, layer_sizes, mapping_size=64, scale=80.0):
-        """
-        layer_sizes example:
-        [2,32,32,32,2]
-
-        Actual network becomes:
-        [2, mapping_size, 32, 32, 32, 2]
-        """
+    def init_params(key,
+                    layer_sizes,
+                    mapping_size=64,
+                    sigma_list=(1,4,8,16),
+                    alpha=0.8):
 
         in_dim = layer_sizes[0]
 
-        # split keys
         key_B, key_layers = random.split(key)
 
-        # Fourier matrix
-        B = random.normal(key_B, (mapping_size // 2, in_dim)) * scale
+        K = len(sigma_list)
 
-        # construct new layer sizes
-        new_layer_sizes = [mapping_size] + layer_sizes[1:]
+        m_total = mapping_size // 2
+
+        # ----- compute mk according to Eq.(27) -----
+
+        k_vals = jnp.arange(1, K+1)
+
+        weights = (k_vals / K) ** alpha
+        weights = weights / jnp.sum(weights)
+
+        mk_list = jnp.round(m_total * weights).astype(int)
+
+        # ensure sum equals m_total
+        diff = m_total - jnp.sum(mk_list)
+        mk_list = mk_list.at[-1].add(diff)
+
+        # ----- build multi-scale B -----
+
+        keys = random.split(key_B, K)
+
+        B_list = []
+
+        for i, sigma in enumerate(sigma_list):
+
+            mk = int(mk_list[i])
+
+            Bk = random.normal(
+                keys[i],
+                (mk, in_dim)
+            ) * sigma
+
+            B_list.append(Bk)
+
+        B = jnp.concatenate(B_list, axis=0)
+
+        # encoded input dimension
+        encoded_dim = in_dim + 2 * B.shape[0]
+
+        new_layer_sizes = [encoded_dim] + layer_sizes[1:]
 
         keys = random.split(key_layers, len(new_layer_sizes)-1)
 
@@ -92,7 +212,7 @@ class FourierNet(Network):
         }
 
         return static_params, trainable_params
-
+    
     @staticmethod
     def _random_layer_params(key, m, n):
 
@@ -104,30 +224,28 @@ class FourierNet(Network):
         b = random.uniform(b_key, (n,), minval=-v, maxval=v)
 
         return w, b
-
+    
     @staticmethod
     def _fourier_feature(B, x):
-        """
-        x shape: (xd,)
-        B shape: (mapping_size/2, xd)
-        """
 
-        x_proj = B @ x
+        x_proj = 2 * jnp.pi * (B @ x)
 
         return jnp.concatenate(
             [jnp.sin(x_proj), jnp.cos(x_proj)],
             axis=0
         )
-
+        
     @staticmethod
     def network_fn(params, x):
 
         B = params["static"]["network"]["fourier"]["B"]
-
         layers = params["trainable"]["network"]["subdomain"]["layers"]
 
-        # Fourier mapping
-        x = FourierNet._fourier_feature(B, x)
+        # Fourier features
+        fourier = FourierNet._fourier_feature(B, x)
+
+        # concatenate original coordinates
+        x = jnp.concatenate([x, fourier], axis=0)
 
         # MLP
         for w, b in layers[:-1]:
