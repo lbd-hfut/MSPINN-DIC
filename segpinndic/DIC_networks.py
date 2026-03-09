@@ -122,7 +122,7 @@ class FourierNet(Network):
     @staticmethod
     def network_fn(params, x):
 
-        B = params["static"]["network"]["subdomain"]["fourier"]["B"]
+        B = params["static"]["network"]["fourier"]["B"]
 
         layers = params["trainable"]["network"]["subdomain"]["layers"]
 
