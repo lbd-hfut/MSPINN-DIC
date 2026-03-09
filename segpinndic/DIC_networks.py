@@ -54,7 +54,7 @@ class FCN(Network):
 class FourierNet(Network):
 
     @staticmethod
-    def init_params(key, layer_sizes, mapping_size=64, scale=20.0):
+    def init_params(key, layer_sizes, mapping_size=64, scale=40.0):
         """
         layer_sizes example:
         [2,32,32,32,2]
