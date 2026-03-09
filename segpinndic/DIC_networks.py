@@ -51,6 +51,95 @@ class FCN(Network):
         x = jnp.dot(w, x) + b
         return x
     
+class FourierNet(Network):
+
+    @staticmethod
+    def init_params(key, layer_sizes, mapping_size=64, scale=20.0):
+        """
+        layer_sizes example:
+        [2,32,32,32,2]
+
+        Actual network becomes:
+        [2, mapping_size, 32, 32, 32, 2]
+        """
+
+        in_dim = layer_sizes[0]
+
+        # split keys
+        key_B, key_layers = random.split(key)
+
+        # Fourier matrix
+        B = random.normal(key_B, (mapping_size // 2, in_dim)) * scale
+
+        # construct new layer sizes
+        new_layer_sizes = [mapping_size] + layer_sizes[1:]
+
+        keys = random.split(key_layers, len(new_layer_sizes)-1)
+
+        params = [
+            FourierNet._random_layer_params(k, m, n)
+            for k, m, n in zip(keys, new_layer_sizes[:-1], new_layer_sizes[1:])
+        ]
+
+        static_params = {
+            "fourier": {
+                "B": B
+            }
+        }
+
+        trainable_params = {
+            "layers": params
+        }
+
+        return static_params, trainable_params
+
+    @staticmethod
+    def _random_layer_params(key, m, n):
+
+        w_key, b_key = random.split(key)
+
+        v = jnp.sqrt(1/m)
+
+        w = random.uniform(w_key, (n, m), minval=-v, maxval=v)
+        b = random.uniform(b_key, (n,), minval=-v, maxval=v)
+
+        return w, b
+
+    @staticmethod
+    def _fourier_feature(B, x):
+        """
+        x shape: (xd,)
+        B shape: (mapping_size/2, xd)
+        """
+
+        x_proj = B @ x
+
+        return jnp.concatenate(
+            [jnp.sin(x_proj), jnp.cos(x_proj)],
+            axis=0
+        )
+
+    @staticmethod
+    def network_fn(params, x):
+
+        B = params["static"]["network"]["subdomain"]["fourier"]["B"]
+
+        layers = params["trainable"]["network"]["subdomain"]["layers"]
+
+        # Fourier mapping
+        x = FourierNet._fourier_feature(B, x)
+
+        # MLP
+        for w, b in layers[:-1]:
+            x = jnp.dot(w, x) + b
+            x = jnp.tanh(x)
+
+        w, b = layers[-1]
+
+        x = jnp.dot(w, x) + b
+
+        return x
+    
 class ResNet(Network):
 
     @staticmethod
