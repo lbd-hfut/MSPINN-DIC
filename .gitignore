@@ -212,6 +212,7 @@ jupyterlab/
 # case dir
 config/*.txt
 case/**/*.m
+case/**/*.asv
 case/**/*.mat
 case/**/*.png
 case/**/results/models/
