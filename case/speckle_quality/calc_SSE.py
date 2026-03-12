@@ -102,4 +102,4 @@ def main(degree=3, alpha=1.5):
 # ------------------------------------------------
 
 if __name__ == "__main__":
-    main(degree=3, alpha=3.0)
+    main(degree=5, alpha=3.0)
