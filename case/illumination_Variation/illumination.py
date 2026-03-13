@@ -11,7 +11,7 @@ np.random.seed(42)
 # ==============================
 # 文件夹
 # ==============================
-folder = r"C:/01project/SegPINN-DIC/case/speckle_quality/r1_n5000_g6"
+folder = r"C:/01project/SegPINN-DIC/case/speckle_quality/r1_n8000_g6"
 save_folder = r"C:/01project/SegPINN-DIC/case/illumination_Variation"
 
 
