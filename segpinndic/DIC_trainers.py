@@ -294,15 +294,15 @@ def FBPINN_loss(active_params, fixed_params, static_params, takes, x_batch, mode
     all_params = {"static":static_params, "trainable":trainable_params}
     # run FBPINN 
     u = FBPINN_forward(all_params, x_batch, takes, model_fns)
-    return loss_fn(all_params, x_batch, u, takes[0], num_models)
+    return loss_fn(all_params, x_batch, u, takes, num_models)
 
-def PINN_loss(active_params, static_params, x_batch, model_fns, loss_fn, m_take, num_models):
+def PINN_loss(active_params, static_params, x_batch, model_fns, loss_fn, takes, num_models):
 
     # recombine all_params
     all_params = {"static":static_params, "trainable":active_params}
     # run PINN 
     u = PINN_forward(all_params, x_batch, model_fns)
-    return loss_fn(all_params, x_batch, u, m_take, num_models)
+    return loss_fn(all_params, x_batch, u, takes, num_models)
 
 @partial(jit, static_argnums=(0,5,8,9))
 def FBPINN_update(optimiser_fn, active_opt_states,
@@ -320,12 +320,12 @@ def FBPINN_update(optimiser_fn, active_opt_states,
 @partial(jit, static_argnums=(0, 4, 6, 7))
 def PINN_update(optimiser_fn, active_opt_states,
                 active_params, static_params_dynamic, static_params_static,
-                x_batch, model_fns, loss_fn, m_take, num_models):
+                x_batch, model_fns, loss_fn, takes, num_models):
     # recombine static params
     static_params = combine(static_params_dynamic, static_params_static)
     # update step
     lossval, grads = value_and_grad(PINN_loss, argnums=0)(
-        active_params, static_params, x_batch, model_fns, loss_fn, m_take, num_models)
+        active_params, static_params, x_batch, model_fns, loss_fn, takes, num_models)
     updates, active_opt_states = optimiser_fn(grads, active_opt_states, active_params)
     active_params = optax.apply_updates(active_params, updates)
     return lossval, active_opt_states, active_params
@@ -771,10 +771,13 @@ class PINNTrainer(_Trainer):
         logger.info(f"[i: {0}/{self.c.n_steps}] Compiling update step..")
         static_params_dynamic, static_params_static = partition(static_params) # 图像和预处理那里需要处理一下
         m_take = jnp.zeros((x_batch.shape[0],), dtype=int)# dummy m_takes for PINN loss_fn
+        N = x_batch.shape[0]
+        n_take = jnp.arange(N, dtype=jnp.int32)
+        takes = (m_take, n_take)
         num_models = jnp.zeros((1,))
         update = PINN_update.lower(optimiser_fn, active_opt_states,
                                    active_params, static_params_dynamic, static_params_static,
-                                   x_batch, model_fns, loss_fn, m_take, num_models).compile()
+                                   x_batch, model_fns, loss_fn, takes, num_models).compile()
         logger.info(f"[i: {0}/{self.c.n_steps}] Compiling done ({time.time()-startc:.2f} s)")
         cost_ = update.cost_analysis()
         p = total_size(active_params["network"])
@@ -799,7 +802,7 @@ class PINNTrainer(_Trainer):
             # take a training step
             lossval, active_opt_states, active_params = update(active_opt_states,
                                        active_params, static_params_dynamic,
-                                       x_batch, m_take, num_models)# note compiled function only accepts dynamic arguments
+                                       x_batch, takes, num_models)# note compiled function only accepts dynamic arguments
             pstep, fstep = pstep+p, fstep+f
 
             # report

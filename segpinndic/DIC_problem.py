@@ -137,7 +137,7 @@ class DIC_ZNSSD(Problem):
         return [[x_batch_global, required_ujs]]
     
     @staticmethod
-    def loss_fn(all_params, x_batch, uv, m_takes, num_models_shape):
+    def loss_fn(all_params, x_batch, uv, takes, num_models_shape):
         ref_img = all_params["static"]["problem"]["ref_img"]
         QKBQKT_def = all_params["static"]["problem"]["QKBQKT_def"]
         degree = all_params["static"]["problem"]["degree"]
@@ -175,10 +175,12 @@ class DIC_ZNSSD(Problem):
         values = ref_img[yref.astype(jnp.int32), xref.astype(jnp.int32)]
 
         # ---------- ZNSSD ----------
-        f = values
-        g = warp_values
+        m = takes[0]
+        n = takes[1]
         
-        m = m_takes
+        f = values[n]
+        g = warp_values[n]
+        
         num_models = num_models_shape.shape[0]
         counts = jax.ops.segment_sum(jnp.ones_like(f), m, num_models)
         
