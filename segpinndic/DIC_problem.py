@@ -108,16 +108,88 @@ class DIC_MSE(Problem):
         return mse
     
 
-class DIC_ZNCC(Problem):
-    """DIC problem class with MSE loss function"""
+class DIC_ZNSSD(Problem):
+    """DIC problem class with ZNSSD loss function"""
 
     @staticmethod
-    def init_params(ref_img, QKBQKT_def, mask):
+    def init_params(ref_img, QKBQKT_def, mask, degree):
         static_params = {
+            "dims":(2,2),
             "QKBQKT_def": QKBQKT_def,
             "ref_img": ref_img,
             "mask": mask,
+            "degree": degree,
         }
         return static_params, {}
+    
+    @staticmethod
+    def sample_constraints(all_params, domain):
+        x_batch_global = domain.sample_interior(all_params["static"]["problem"]["mask"])
+
+        required_ujs = (
+            (0,()),
+            (1,()),
+            (0,(0,)),
+            (0,(1,)),
+            (1,(0,)),
+            (1,(1,))
+        )
+        return [[x_batch_global, required_ujs]]
+    
+    @staticmethod
+    def loss_fn(all_params, x_batch, uv, ims):
+        ref_img = all_params["static"]["problem"]["ref_img"]
+        QKBQKT_def = all_params["static"]["problem"]["QKBQKT_def"]
+        degree = all_params["static"]["problem"]["degree"]
+        u, v = uv[:,0], uv[:,1]
+
+        xref, yref = x_batch[:,0], x_batch[:,1]
+        xs, ys = xref + u, yref + v
+
+        # warp defimg
+        H, W = QKBQKT_def.shape[:2]
+
+        xs_floor = jax.lax.stop_gradient(jnp.floor(xs)).astype(jnp.int32)
+        ys_floor = jax.lax.stop_gradient(jnp.floor(ys)).astype(jnp.int32)
+
+        xs_oob = (xs_floor < 0) | (xs_floor >= W)
+        ys_oob = (ys_floor < 0) | (ys_floor >= H)
+        mask = xs_oob | ys_oob
+
+        xs_floor = jnp.clip(xs_floor, 0, W - 1)
+        ys_floor = jnp.clip(ys_floor, 0, H - 1)
+
+        # (N,6,6)
+        QK_B_QKT = QKBQKT_def[ys_floor, xs_floor]
+
+        xd = xs - xs_floor
+        yd = ys - ys_floor
+
+        powers = jnp.arange(degree+1)
+        x_vec = xd[:, None] ** powers[None, :]
+        y_vec = yd[:, None] ** powers[None, :]
+
+        tmp = jnp.einsum("ni,nij->nj", y_vec, QK_B_QKT)
+        warp_values = jnp.einsum("ni,ni->n", tmp, x_vec)
+
+        values = ref_img[yref.astype(jnp.int32), xref.astype(jnp.int32)]
+
+        # ---------- ZNSSD ----------
+        f = values
+        g = warp_values
+
+        f_mean = jax.lax.stop_gradient(jnp.mean(f))
+        g_mean = jax.lax.stop_gradient(jnp.mean(g))
+
+        f_std = jax.lax.stop_gradient(jnp.std(f)) + 1e-8
+        g_std = jax.lax.stop_gradient(jnp.std(g)) + 1e-8
+
+        f_norm = (f - f_mean) / f_std
+        g_norm = (g - g_mean) / g_std
+
+        znssd = jnp.mean((f_norm - g_norm) ** 2)
+
+        return znssd
+    
 
     
