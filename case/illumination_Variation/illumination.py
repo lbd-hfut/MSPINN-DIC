@@ -112,7 +112,7 @@ def main():
         "def_illumination_field": def_field,
         "A_ref": 0.4,
         "sigma_ref": 150,
-        "A_def": 0.3,
+        "A_def": 0.5,
         "sigma_def": 200
     })
 
