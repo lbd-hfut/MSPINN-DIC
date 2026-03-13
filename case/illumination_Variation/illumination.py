@@ -2,6 +2,7 @@ import os
 import glob
 import numpy as np
 from PIL import Image
+from scipy.io import savemat
 
 # ==============================
 # 固定随机数种子
@@ -68,7 +69,7 @@ def apply_illumination(img, A, sigma):
 
     img_new = img * field
 
-    return img_new
+    return img_new, field
 
 
 # ==============================
@@ -92,8 +93,8 @@ def main():
     deformed = read_image(def_path)
 
     # 两种不同 illumination
-    ref_new = apply_illumination(ref, A=0.4, sigma=150)
-    def_new = apply_illumination(deformed, A=0.3, sigma=200)
+    ref_new, ref_field = apply_illumination(ref, A=0.4, sigma=150)
+    def_new, def_field = apply_illumination(deformed, A=0.3, sigma=200)
     roi = 255 * np.ones_like(ref_new, dtype=np.uint8)
 
     # 保存
@@ -104,6 +105,16 @@ def main():
     save_image(ref_new, ref_save)
     save_image(def_new, def_save)
     save_image(roi, roi_save)
+    
+    mat_save_path = os.path.join(save_folder, "illumination_fields.mat")
+    savemat(mat_save_path, {
+        "ref_illumination_field": ref_field,
+        "def_illumination_field": def_field,
+        "A_ref": 0.4,
+        "sigma_ref": 150,
+        "A_def": 0.3,
+        "sigma_def": 200
+    })
 
     print("\nSaved:")
     print(ref_save)
