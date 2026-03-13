@@ -294,7 +294,7 @@ def FBPINN_loss(active_params, fixed_params, static_params, takes, x_batch, mode
     all_params = {"static":static_params, "trainable":trainable_params}
     # run FBPINN 
     u = FBPINN_forward(all_params, x_batch, takes, model_fns)
-    return loss_fn(all_params, x_batch, u)
+    return loss_fn(all_params, x_batch, u, takes[0])
 
 def PINN_loss(active_params, static_params, x_batch, model_fns, loss_fn):
 
