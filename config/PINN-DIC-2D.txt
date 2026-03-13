@@ -35,14 +35,14 @@ AdaptiveFCN
 5
 
 # loss_fun: 损失函数的选择 ["DIC_MSE", "DIC_ZNSSD"]
-DIC_ZNSSD
+DIC_MSE
 
 ############################################
 # 🏋️‍♂️ 训练参数（常调整）
 ############################################
 
 # adam_epochs: Adam轮数
-3000
+1000
 
 # seed_flag: 判断是否使用种子点，使用的话请配置“Seed_Configuration.txt”
 True
