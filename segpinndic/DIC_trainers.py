@@ -304,7 +304,7 @@ def PINN_loss(active_params, static_params, x_batch, model_fns, loss_fn, m_take,
     u = PINN_forward(all_params, x_batch, model_fns)
     return loss_fn(all_params, x_batch, u, m_take, num_models)
 
-@partial(jit, static_argnums=(0,5,8,9,10))
+@partial(jit, static_argnums=(0,5,8,9))
 def FBPINN_update(optimiser_fn, active_opt_states,
                   active_params, fixed_params, static_params_dynamic, static_params_static,
                   takes, x_batch, model_fns, loss_fn, num_models):
@@ -317,7 +317,7 @@ def FBPINN_update(optimiser_fn, active_opt_states,
     active_params = optax.apply_updates(active_params, updates)
     return lossval, active_opt_states, active_params
 
-@partial(jit, static_argnums=(0, 4, 6, 7, 9))
+@partial(jit, static_argnums=(0, 4, 6, 7))
 def PINN_update(optimiser_fn, active_opt_states,
                 active_params, static_params_dynamic, static_params_static,
                 x_batch, model_fns, loss_fn, m_take, num_models):
@@ -590,7 +590,8 @@ class FBPINNTrainer(_Trainer):
                 startc = time.time()
                 logger.info(f"[i: {i}/{self.c.n_steps}] Compiling update step..")
                 static_params_dynamic, static_params_static = partition(static_params)
-                num_models = jnp.max(takes[0]) + 1
+                ims = jnp.max(takes[0]) + 1
+                num_models = jnp.zeros((ims,))
                 update = FBPINN_update.lower(optimiser_fn, active_opt_states,
                                              active_params, fixed_params, static_params_dynamic, static_params_static,
                                              takes, x_batch, model_fns, loss_fn, num_models).compile()
@@ -770,9 +771,10 @@ class PINNTrainer(_Trainer):
         logger.info(f"[i: {0}/{self.c.n_steps}] Compiling update step..")
         static_params_dynamic, static_params_static = partition(static_params) # 图像和预处理那里需要处理一下
         m_take = jnp.zeros((x_batch.shape[0],), dtype=int)# dummy m_takes for PINN loss_fn
+        num_models = jnp.zeros((1,))
         update = PINN_update.lower(optimiser_fn, active_opt_states,
                                    active_params, static_params_dynamic, static_params_static,
-                                   x_batch, model_fns, loss_fn, m_take, 1).compile()
+                                   x_batch, model_fns, loss_fn, m_take, num_models).compile()
         logger.info(f"[i: {0}/{self.c.n_steps}] Compiling done ({time.time()-startc:.2f} s)")
         cost_ = update.cost_analysis()
         p = total_size(active_params["network"])
