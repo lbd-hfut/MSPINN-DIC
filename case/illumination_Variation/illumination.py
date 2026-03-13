@@ -93,7 +93,7 @@ def main():
 
     # 两种不同 illumination
     ref_new = apply_illumination(ref, A=0.4, sigma=150)
-    def_new = apply_illumination(deformed, A=0.3, sigma=100)
+    def_new = apply_illumination(deformed, A=0.3, sigma=200)
     roi = 255 * np.ones_like(ref_new, dtype=np.uint8)
 
     # 保存
