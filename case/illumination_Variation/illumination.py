@@ -99,7 +99,7 @@ def main():
     # 保存
     ref_save = os.path.join(save_folder, "001.bmp")
     def_save = os.path.join(save_folder, "002.bmp")
-    roi_save = os.path.join(save_folder, "roi.bmp")
+    roi_save = os.path.join(save_folder, "003.bmp")
 
     save_image(ref_new, ref_save)
     save_image(def_new, def_save)
