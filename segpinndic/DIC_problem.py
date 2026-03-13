@@ -67,7 +67,7 @@ class DIC_MSE(Problem):
         return [[x_batch_global, required_ujs]]
     
     @staticmethod
-    def loss_fn(all_params, x_batch, uv):
+    def loss_fn(all_params, x_batch, uv, m_takes):
         ref_img = all_params["static"]["problem"]["ref_img"]
         QKBQKT_def = all_params["static"]["problem"]["QKBQKT_def"]
         degree = all_params["static"]["problem"]["degree"]
@@ -137,7 +137,7 @@ class DIC_ZNSSD(Problem):
         return [[x_batch_global, required_ujs]]
     
     @staticmethod
-    def loss_fn(all_params, x_batch, uv, ims):
+    def loss_fn(all_params, x_batch, uv, m_takes):
         ref_img = all_params["static"]["problem"]["ref_img"]
         QKBQKT_def = all_params["static"]["problem"]["QKBQKT_def"]
         degree = all_params["static"]["problem"]["degree"]
