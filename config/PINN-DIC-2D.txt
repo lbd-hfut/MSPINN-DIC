@@ -20,19 +20,19 @@ C:/01project/SegPINN-DIC/case/speckle_quality/r1_n5000_g9/results
 ############################################
 
 # n_subdomains: 区域分割
-[4, 4]
+[1, 1]
 
 # train_schedulers: 训练方式 ["AllActiveSchedulerND", "PointSchedulerRectangularND", "LineSchedulerRectangularND"]
 AllActiveSchedulerND
 
 # hidden_units: PINN-DIC神经元数目列表
-[32]
+[32, 32, 32, 32, 32, 32, 32, 32]
 
 # network: 神经网络 ["FCN", "AdaptiveFCN", "SIREN", "AdaptiveSIREN", "ResNet", "AdaptiveResNet"， "FourierNet"]
 AdaptiveFCN
 
 # spline_degree: 插值方法 [1, 3, 5]
-5
+3
 
 # loss_fun: 损失函数的选择 ["DIC_MSE", "DIC_ZNCC"]
 DIC_MSE
