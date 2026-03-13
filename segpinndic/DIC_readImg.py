@@ -156,14 +156,16 @@ def build_seed_buffer_jax(img, mask, degree=5):
         plot_bcoef, mask, degree, QK=BufferManager.SEED_QK)
     
 def build_DIC_buffer_jax(img, degree=5):
-    BufferManager.DIC_QK = get_QK(degree)
-    plot_bcoef = form_bcoef(img, degree)
     logger.info("precomputing seed buffers: QKBQKT_def")
-    BufferManager.QKBQKT_def_seed = get_QK_B_QKT(plot_bcoef, img, degree=5, QK=BufferManager.DIC_QK)
+    plot_bcoef = form_bcoef(img, degree=5)
+    BufferManager.QKBQKT_def_seed = get_QK_B_QKT(plot_bcoef, img, degree=5, QK=BufferManager.SEED_QK)
     logger.info("precomputing DIC buffers: QKBQKT_def")
     if degree != 5:
+        BufferManager.DIC_QK = get_QK(degree)
+        plot_bcoef = form_bcoef(img, degree)
         BufferManager.QKBQKT_def_DIC = get_QK_B_QKT(plot_bcoef, img, degree, QK=BufferManager.DIC_QK)
     else:
+        BufferManager.DIC_QK = BufferManager.SEED_QK
         BufferManager.QKBQKT_def_DIC = BufferManager.QKBQKT_def_seed
     
 class ImgDataset:
