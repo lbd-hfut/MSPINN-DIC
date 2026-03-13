@@ -302,7 +302,8 @@ def PINN_loss(active_params, static_params, x_batch, model_fns, loss_fn):
     all_params = {"static":static_params, "trainable":active_params}
     # run PINN 
     u = PINN_forward(all_params, x_batch, model_fns)
-    return loss_fn(all_params, x_batch, u)
+    m_takes = jnp.zeros((u.shape[0],), dtype=int)# dummy m_takes for PINN loss_fn
+    return loss_fn(all_params, x_batch, u, m_takes)
 
 @partial(jit, static_argnums=(0,5,8,9))
 def FBPINN_update(optimiser_fn, active_opt_states,
