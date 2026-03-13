@@ -6,10 +6,10 @@
 ############################################
 
 # input_dir: 输入图像所在的文件夹路径
-C:/01project/SegPINN-DIC/case/speckle_quality/illumination_Variation
+C:/01project/SegPINN-DIC/case/illumination_Variation
 
 # output_dir: 结果输出文件夹路径
-C:/01project/SegPINN-DIC/case/speckle_quality/illumination_Variation/results
+C:/01project/SegPINN-DIC/case/illumination_Variation/results
 
 ############################################
 # 🧠 网络结构参数（一般偶尔改）
