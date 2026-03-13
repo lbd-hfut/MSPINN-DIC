@@ -177,15 +177,35 @@ class DIC_ZNSSD(Problem):
         # ---------- ZNSSD ----------
         f = values
         g = warp_values
+        
+        m = m_takes
+        num_models = jnp.max(m) + 1
+        
+        counts = jax.ops.segment_sum(jnp.ones_like(f), m, num_models)
+        
+        # ---------- mean ----------
+        f_mean = jax.ops.segment_sum(f, m, num_models) / counts
+        g_mean = jax.ops.segment_sum(g, m, num_models) / counts
+        
+        f_mean = jax.lax.stop_gradient(f_mean)
+        g_mean = jax.lax.stop_gradient(g_mean)
+        
+        f_mean_p = f_mean[m]
+        g_mean_p = g_mean[m]
+        
+        # ---------- std ----------
+        f_var = jax.ops.segment_sum((f - f_mean_p)**2, m, num_models) / counts
+        g_var = jax.ops.segment_sum((g - g_mean_p)**2, m, num_models) / counts
 
-        f_mean = jax.lax.stop_gradient(jnp.mean(f))
-        g_mean = jax.lax.stop_gradient(jnp.mean(g))
+        f_std = jax.lax.stop_gradient(jnp.sqrt(f_var)) + 1e-8
+        g_std = jax.lax.stop_gradient(jnp.sqrt(g_var)) + 1e-8
 
-        f_std = jax.lax.stop_gradient(jnp.std(f)) + 1e-8
-        g_std = jax.lax.stop_gradient(jnp.std(g)) + 1e-8
-
-        f_norm = (f - f_mean) / f_std
-        g_norm = (g - g_mean) / g_std
+        f_std_p = f_std[m]
+        g_std_p = g_std[m]
+        
+        # ---------- normalize ----------
+        f_norm = (f - f_mean_p) / f_std_p
+        g_norm = (g - g_mean_p) / g_std_p
 
         znssd = jnp.mean((f_norm - g_norm) ** 2)
 
