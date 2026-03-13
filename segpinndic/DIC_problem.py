@@ -203,8 +203,12 @@ class DIC_ZNSSD(Problem):
         g_std_p = g_std[m]
         
         # ---------- normalize ----------
-        f_norm = (f - f_mean_p) / f_std_p
-        g_norm = (g - g_mean_p) / g_std_p
+        # f_norm = (f - f_mean_p) / f_std_p
+        # g_norm = (g - g_mean_p) / g_std_p
+        
+        # Avoid excessively small gradients
+        f_norm = (f - f_mean_p)
+        g_norm = (g - g_mean_p) / g_std_p * f_std_p
 
         znssd = jnp.mean((f_norm - g_norm) ** 2)
 
