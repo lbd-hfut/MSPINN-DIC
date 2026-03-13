@@ -613,7 +613,7 @@ class FBPINNTrainer(_Trainer):
             # take a training step
             lossval, active_opt_states, active_params = update(active_opt_states,
                                          active_params, fixed_params, static_params_dynamic,
-                                         takes, x_batch)# note compiled function only accepts dynamic arguments
+                                         takes, x_batch, num_models)# note compiled function only accepts dynamic arguments
             pstep, fstep = pstep+p, fstep+f
 
             # report
@@ -799,7 +799,7 @@ class PINNTrainer(_Trainer):
             # take a training step
             lossval, active_opt_states, active_params = update(active_opt_states,
                                        active_params, static_params_dynamic,
-                                       x_batch)# note compiled function only accepts dynamic arguments
+                                       x_batch, m_take, num_models)# note compiled function only accepts dynamic arguments
             pstep, fstep = pstep+p, fstep+f
 
             # report
