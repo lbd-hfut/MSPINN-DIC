@@ -94,13 +94,16 @@ def main():
     # 两种不同 illumination
     ref_new = apply_illumination(ref, A=0.4, sigma=150)
     def_new = apply_illumination(deformed, A=0.3, sigma=100)
+    roi = 255 * np.ones_like(ref_new, dtype=np.uint8)
 
     # 保存
-    ref_save = os.path.join(save_folder, "ref_spot.bmp")
-    def_save = os.path.join(save_folder, "def_spot.bmp")
+    ref_save = os.path.join(save_folder, "001.bmp")
+    def_save = os.path.join(save_folder, "002.bmp")
+    roi_save = os.path.join(save_folder, "roi.bmp")
 
     save_image(ref_new, ref_save)
     save_image(def_new, def_save)
+    save_image(roi, roi_save)
 
     print("\nSaved:")
     print(ref_save)
