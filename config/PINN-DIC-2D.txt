@@ -34,8 +34,8 @@ AdaptiveFCN
 # spline_degree: 插值方法 [1, 3, 5]
 5
 
-# loss_fun: 损失函数的选择 ["DIC_MSE", "DIC_ZNCC"]
-DIC_MSE
+# loss_fun: 损失函数的选择 ["DIC_MSE", "DIC_ZNSSD"]
+DIC_ZNSSD
 
 ############################################
 # 🏋️‍♂️ 训练参数（常调整）
