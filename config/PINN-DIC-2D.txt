@@ -32,7 +32,7 @@ AllActiveSchedulerND
 AdaptiveFCN
 
 # spline_degree: 插值方法 [1, 3, 5]
-3
+1
 
 # loss_fun: 损失函数的选择 ["DIC_MSE", "DIC_ZNCC"]
 DIC_MSE
