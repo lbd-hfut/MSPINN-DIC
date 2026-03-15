@@ -54,7 +54,7 @@ def main(
                 logger.info(f"ROI_id{roi_id+1}: umax: {jnp.max(seed_uv[roi_id][:,0])}, v_max: {jnp.max(seed_uv[roi_id][:,1])}")
                 logger.info(f"ROI_id{roi_id+1}: umin: {jnp.min(seed_uv[roi_id][:,0])}, v_min: {jnp.min(seed_uv[roi_id][:,1])}")
         else:
-            BufferManager.scale_uv = [jnp.asarray((0.,0.,80.,80.)) for roi_id in range(N_roi)]
+            BufferManager.scale_uv = [jnp.asarray((0.,0.,1.,1.)) for roi_id in range(N_roi)]
         u = v = exx = exy = eyy = jnp.zeros_like(BufferManager.refImg)
         for roi_id in range(N_roi):
             logger.info(f"Processing imgage pair {i+1}/{N_pairs} ROI {roi_id+1}/{N_roi}")
