@@ -32,7 +32,7 @@ AllActiveSchedulerND
 AdaptiveFCN
 
 # spline_degree: 插值方法 [1, 3, 5]
-5
+1
 
 # loss_fun: 损失函数的选择 ["DIC_MSE", "DIC_ZNSSD"]
 DIC_ZNSSD
@@ -42,7 +42,7 @@ DIC_ZNSSD
 ############################################
 
 # adam_epochs: Adam轮数
-100
+200
 
 # seed_flag: 判断是否使用种子点，使用的话请配置“Seed_Configuration.txt”
 True
