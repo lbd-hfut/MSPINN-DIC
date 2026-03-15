@@ -215,6 +215,7 @@ case/**/*.m
 case/**/*.asv
 case/**/*.mat
 case/**/*.png
+case/**/*.xlsx
 case/**/results/models/
 case/**/results/summaries/
 
