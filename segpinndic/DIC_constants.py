@@ -112,6 +112,8 @@ class Constants(ConstantsBase):
                 ]
             self.subdomain_ws = get_subdomain_ws(self.subdomain_xs, 1.6)
         else:
+            nx = max(nx, 2)
+            ny = max(ny, 2)
             self.subdomain_xs = [
                 np.linspace(xmin_roi, xmax_roi, nx), 
                 np.linspace(ymin_roi, ymax_roi, ny)
