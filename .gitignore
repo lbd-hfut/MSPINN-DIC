@@ -218,4 +218,6 @@ case/**/*.png
 case/**/*.xlsx
 case/**/results/models/
 case/**/results/summaries/
+*.sh
+*.zip
 
