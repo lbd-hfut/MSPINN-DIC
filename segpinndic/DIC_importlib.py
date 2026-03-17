@@ -1,4 +1,7 @@
 import os
+use_gpu = True  # True=用GPU，False=用CPU
+if not use_gpu:
+    os.environ["JAX_PLATFORM_NAME"] = "cpu"
 import sys
 import ast
 import time
