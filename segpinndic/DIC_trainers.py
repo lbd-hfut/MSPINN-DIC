@@ -12,11 +12,6 @@ class _Trainer:
 
     def __init__(self, c):
         "Initialise device and output directories"
-
-        # clear directories
-        c.get_outdirs()
-        c.clear_outdirs()
-        c.save_constants_file()
         # logger.info(c)
 
         # # initialise summary writer
