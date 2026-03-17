@@ -27,6 +27,11 @@ def main(
     for roi_id in range(N_roi):
         c_ = Constants(DIC_config, roi_id)
         constants_list.append(c_)
+        if roi_id < 1:
+            # clear directories
+            c_.get_outdirs()
+            c_.clear_outdirs()
+            c_.save_constants_file()
     
     if np.prod(tuple(DIC_config.n_subdomains)) == 1:
         logger.info("using PINN solver")
