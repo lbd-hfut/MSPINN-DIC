@@ -124,8 +124,8 @@ class Constants(ConstantsBase):
                 (np.linspace(ymin_roi, ymax_roi, ny+1)[:-1]+np.linspace(ymin_roi, ymax_roi, ny+1)[1:])/2
                 ]
             subdomain_ws = [
-                np.linspace(xmin_roi, xmax_roi, nx), 
-                np.linspace(ymin_roi, ymax_roi, ny)
+                np.linspace(xmin_roi, xmax_roi, nx+1), 
+                np.linspace(ymin_roi, ymax_roi, ny+1)
                 ]
             self.subdomain_ws = get_subdomain_ws(subdomain_ws, 1.6)
         self.decomposition = DIC_decompositions.RectangularDecompositionND
