@@ -6,7 +6,7 @@
 ############################################
 
 # input_dir: 输入图像所在的文件夹路径
-C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise
+C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise/
 
 # output_dir: 结果输出文件夹路径
 C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise/results
@@ -16,17 +16,17 @@ C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise/results
 # hidden_units为PINN-DIC隐藏层神经元数目列表，控制网络宽度。
 # scale_networks为多尺度网络比例，用于改进收敛性和精度。
 # 例如scale_networks=[1,4,8,16]表示使用4个网络，分别对输入x乘以4个系数。
-# activation为激活函数名称（tanh/relu/sigmoid/leaky_relu/softplus/SiLU/sin），决定非线性表达能力。
+# 其中activation为激活函数名称（tanh/relu/sigmoid/leaky_relu/softplus/SiLU/sin），决定非线性表达能力。
 ############################################
 
 # n_subdomains: 区域分割
-[16, 4]
+[1, 1]
 
 # train_schedulers: 训练方式 ["AllActiveSchedulerND", "PointSchedulerRectangularND", "LineSchedulerRectangularND"]
 AllActiveSchedulerND
 
 # hidden_units: PINN-DIC神经元数目列表
-[32]
+[32, 32, 32]
 
 # network: 神经网络 ["FCN", "AdaptiveFCN", "SIREN", "AdaptiveSIREN", "ResNet", "AdaptiveResNet"， "FourierNet"]
 AdaptiveFCN
@@ -42,10 +42,10 @@ DIC_MSE
 ############################################
 
 # adam_epochs: Adam轮数
-4000
+3000
 
 # seed_flag: 判断是否使用种子点，使用的话请配置“Seed_Configuration.txt”
-False
+True
 
 # seed_train_epochs: 种子点预训练轮数（不训练种子点提供网络输出的尺度系数）
 0
@@ -55,7 +55,7 @@ False
 ############################################
 
 # adam_lr: Adam预热学习率
-0.005
+0.01
 
 # adam_betas: Adam动量参数(beta1, beta2)
 [0.9, 0.999]
