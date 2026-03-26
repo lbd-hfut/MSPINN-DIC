@@ -119,15 +119,18 @@ class Constants(ConstantsBase):
             #     np.linspace(ymin_roi, ymax_roi, ny)
             #     ]
             # self.subdomain_ws = get_subdomain_ws(self.subdomain_xs, 1.6)
-            self.subdomain_xs = [
-                (np.linspace(xmin_roi, xmax_roi, nx+1)[:-1]+np.linspace(xmin_roi, xmax_roi, nx+1)[1:])/2,
-                (np.linspace(ymin_roi, ymax_roi, ny+1)[:-1]+np.linspace(ymin_roi, ymax_roi, ny+1)[1:])/2
-                ]
-            subdomain_ws = [
+            nodes_xs = [
                 np.linspace(xmin_roi, xmax_roi, nx+1), 
                 np.linspace(ymin_roi, ymax_roi, ny+1)
-                ]
-            self.subdomain_ws = get_subdomain_ws(subdomain_ws, 1.6)
+            ]
+            self.subdomain_ws = [
+                1.6 * np.min(np.diff(nodes)) * np.ones(nx_or_ny_current)                 for nodes, nx_or_ny_current in zip(nodes_xs, [nx, ny])
+            ]
+            self.subdomain_xs = [
+                (nodes[:-1] + nodes[1:]) / 2 
+                for nodes in nodes_xs
+            ]
+            
         self.decomposition = DIC_decompositions.RectangularDecompositionND
         self.decomposition_init_kwargs = dict(
             subdomain_xs=self.subdomain_xs,
