@@ -2,7 +2,7 @@
 # 📂 路径配置（需要改）
 # 其中input_dir文件中图像名称长度一致，且按名称顺序排列，
 # 第一张为参考图像，最后一张为参考图像，中间为变形图像
-# output_dir里面存放求解得到的结果文件，每张变形图的结果为“图像名称.mat”文件
+# 其中output_dir里面存放求解得到的结果文件，每张变形图的结果为“图像名称.mat”文件
 ############################################
 
 # input_dir: 输入图像所在的文件夹路径
@@ -13,8 +13,8 @@ C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise/results
 
 ############################################
 # 🧠 网络结构参数（一般偶尔改）
-# hidden_units为PINN-DIC隐藏层神经元数目列表，控制网络宽度。
-# scale_networks为多尺度网络比例，用于改进收敛性和精度。
+# 其中hidden_units为PINN-DIC隐藏层神经元数目列表，控制网络宽度。
+# 其中scale_networks为多尺度网络比例，用于改进收敛性和精度。
 # 例如scale_networks=[1,4,8,16]表示使用4个网络，分别对输入x乘以4个系数。
 # 其中activation为激活函数名称（tanh/relu/sigmoid/leaky_relu/softplus/SiLU/sin），决定非线性表达能力。
 ############################################
