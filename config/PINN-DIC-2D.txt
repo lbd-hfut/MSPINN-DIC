@@ -20,7 +20,7 @@ C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise/results
 ############################################
 
 # n_subdomains: 区域分割
-[1, 1]
+[4, 1]
 
 # train_schedulers: 训练方式 ["AllActiveSchedulerND", "PointSchedulerRectangularND", "LineSchedulerRectangularND"]
 AllActiveSchedulerND
