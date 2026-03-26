@@ -26,7 +26,7 @@ C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise/results
 AllActiveSchedulerND
 
 # hidden_units: PINN-DIC神经元数目列表
-[32, 32, 32]
+[32]
 
 # network: 神经网络 ["FCN", "AdaptiveFCN", "SIREN", "AdaptiveSIREN", "ResNet", "AdaptiveResNet"， "FourierNet"]
 AdaptiveFCN
