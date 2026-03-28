@@ -67,7 +67,7 @@ class DIC_MSE(Problem):
         return [[x_batch_global, required_ujs]]
     
     @staticmethod
-    def loss_fn(all_params, x_batch, uv, m_takes, num_models_shape):
+    def loss_fn(all_params, x_batch, uv, takes, num_models_shape):
         ref_img = all_params["static"]["problem"]["ref_img"]
         QKBQKT_def = all_params["static"]["problem"]["QKBQKT_def"]
         degree = all_params["static"]["problem"]["degree"]
@@ -102,10 +102,31 @@ class DIC_MSE(Problem):
         tmp = jnp.einsum("ni,nij->nj", y_vec, QK_B_QKT)
         warp_values = jnp.einsum("ni,ni->n", tmp, x_vec)
 
-        valus = ref_img[yref.astype(jnp.int32), xref.astype(jnp.int32)]
+        values = ref_img[yref.astype(jnp.int32), xref.astype(jnp.int32)]
+        # ---------- global MSE ----------
+        mse = jnp.mean((warp_values - values) ** 2)
+        
+        # ---------- per-partition MSE ----------
+        m = takes[0]   # partition id
+        n = takes[1]   # valid indices
 
-        mse = jnp.mean((warp_values - valus) ** 2)
-        return mse
+        f = values[n]
+        g = warp_values[n]
+
+        num_models = num_models_shape.shape[0]
+
+        err = (f - g) ** 2
+
+        # 每个分区的点数
+        counts = jax.ops.segment_sum(jnp.ones_like(err), m, num_models)
+
+        # 每个分区误差和
+        err_sum = jax.ops.segment_sum(err, m, num_models)
+
+        # 每个分区 MSE
+        mse_per_partition = err_sum / (counts + 1e-8)
+
+        return mse, mse_per_partition
     
 
 class DIC_ZNSSD(Problem):
@@ -211,10 +232,24 @@ class DIC_ZNSSD(Problem):
         # Avoid excessively small gradients
         f_norm = (f - f_mean_p)
         g_norm = (g - g_mean_p) / g_std_p * f_std_p
+        
+        # ---------- global ZNSSD ----------
+        err = (f_norm - g_norm) ** 2
+        znssd = jnp.mean(err)
 
-        znssd = jnp.mean((f_norm - g_norm) ** 2)
+        # ---------- per-partition ZNSSD ----------
+        num_models = num_models_shape.shape[0]
 
-        return znssd
+        # 每个分区点数
+        counts = jax.ops.segment_sum(jnp.ones_like(err), m, num_models)
+
+        # 每个分区误差和
+        err_sum = jax.ops.segment_sum(err, m, num_models)
+
+        # 每个分区 ZNSSD
+        znssd_per_partition = err_sum / (counts + 1e-8)
+
+        return znssd, znssd_per_partition
     
 
     
