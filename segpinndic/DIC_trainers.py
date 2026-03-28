@@ -338,6 +338,30 @@ def FBPINN_predict_jit(all_params, x_batch, jmaps, takes, model_fns):
     all_params_dynamic, all_params_static = partition(all_params)
     return _FBPINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, takes, model_fns)
 
+@partial(jax.jit, static_argnums=(3,6,7))
+def FBPINN_loss_eval(active_params, fixed_params, 
+                     static_params_dynamic, static_params_static,
+                     takes, x_batch, model_fns, loss_fn, num_models):
+    static_params = combine(static_params_dynamic, static_params_static)
+    # add fixed params to active, recombine all_params
+    d, da = active_params, fixed_params
+    trainable_params = {
+        cl_k: {
+            k: jax.tree_util.tree_map(
+                    lambda p1, p2:jnp.concatenate([p1,p2],0), 
+                    d[cl_k][k], 
+                    da[cl_k][k]
+                ) if k=="subdomain" else d[cl_k][k]
+                for k in d[cl_k]
+            }
+            for cl_k in d
+        }
+    all_params = {"static":static_params, "trainable":trainable_params}
+    # run FBPINN 
+    u = FBPINN_forward(all_params, x_batch, takes, model_fns)
+    _, loss_per_partition = loss_fn(all_params, x_batch, u, takes, num_models)
+    return loss_per_partition
+
 @partial(jax.jit, static_argnums=(1,3,4))
 def _PINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, model_fns):
     all_params = combine(all_params_dynamic, all_params_static)
@@ -346,6 +370,18 @@ def PINN_predict_jit(all_params, x_batch, jmaps, model_fns):
     all_params_dynamic, all_params_static = partition(all_params)
     return _PINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, model_fns)
 
+@partial(jit, static_argnums=(2, 4, 5))
+def PINN_loss_eval(active_params, 
+                   static_params_dynamic, static_params_static,
+                   x_batch, model_fns, loss_fn, takes, num_models):
+    # recombine static params
+    static_params = combine(static_params_dynamic, static_params_static)
+    # recombine all_params
+    all_params = {"static":static_params, "trainable":active_params}
+    # run PINN 
+    u = PINN_forward(all_params, x_batch, model_fns)
+    loss, _ = loss_fn(all_params, x_batch, u, takes, num_models)
+    return loss
 
 def get_inputs(x_batch, active, all_params, decomposition):
     "Get the inputs to the FBPINN model based on x_batch and the active models"
