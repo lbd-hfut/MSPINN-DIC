@@ -289,7 +289,8 @@ def FBPINN_loss(active_params, fixed_params, static_params, takes, x_batch, mode
     all_params = {"static":static_params, "trainable":trainable_params}
     # run FBPINN 
     u = FBPINN_forward(all_params, x_batch, takes, model_fns)
-    return loss_fn(all_params, x_batch, u, takes, num_models)
+    loss, _ = loss_fn(all_params, x_batch, u, takes, num_models)
+    return loss
 
 def PINN_loss(active_params, static_params, x_batch, model_fns, loss_fn, takes, num_models):
 
@@ -297,7 +298,8 @@ def PINN_loss(active_params, static_params, x_batch, model_fns, loss_fn, takes, 
     all_params = {"static":static_params, "trainable":active_params}
     # run PINN 
     u = PINN_forward(all_params, x_batch, model_fns)
-    return loss_fn(all_params, x_batch, u, takes, num_models)
+    loss, _ = loss_fn(all_params, x_batch, u, takes, num_models)
+    return loss
 
 @partial(jit, static_argnums=(0,5,8,9))
 def FBPINN_update(optimiser_fn, active_opt_states,
