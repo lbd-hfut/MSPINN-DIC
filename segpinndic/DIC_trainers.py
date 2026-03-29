@@ -658,17 +658,18 @@ class FBPINNTrainer(_Trainer):
                                          active_params, fixed_params, static_params_dynamic,
                                          takes, x_batch, num_models)# note compiled function only accepts dynamic arguments
             pstep, fstep = pstep+p, fstep+f
-            if early_manager.need_eval(i + 1):
+            if early_manager.need_eval(i + 1) and i + 1 >= early_cfg.warmup_epochs:
                 part_losses = losss_eval(active_params, fixed_params, static_params_dynamic,
                                          takes, x_batch, num_models)
                 part_losses = np.array(part_losses)
                 new_active, should_stop, info = early_manager.on_eval(i + 1, active, part_losses)
+                logger.info(f"[i: {i+1}/{self.c.n_steps}] cv: {info['global']['cv']:.3e}, gap: {info['global']['gap']:.3e}, ratio: {info['global']['ratio']:.3e}, count: {info['global']['good_count']}, global_ok: {info['global']['global_ok']}")
+                if should_stop:
+                        logger.info(f"[EarlyStop] STOP at step {i+1}, reason={info['stop_reason']}")
+                        break
                 if len(info["frozen_ids"]) > 0:
                     logger.info(f"[EarlyStop] Freezing partitions: {info['frozen_ids']}")
                     pending_active_override = new_active.copy()
-                    if should_stop:
-                        logger.info(f"[EarlyStop] STOP at step {i+1}, reason={info['stop_reason']}")
-                        break
 
             # report
             lossval, start1, report_time = \
