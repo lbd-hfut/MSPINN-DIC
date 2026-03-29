@@ -6,10 +6,10 @@
 ############################################
 
 # input_dir: 输入图像所在的文件夹路径
-C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise/
+C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star2Noise/
 
 # output_dir: 结果输出文件夹路径
-C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise/results
+C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star2Noise/results
 
 ############################################
 # 🧠 网络结构参数（一般偶尔改）

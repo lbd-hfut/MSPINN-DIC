@@ -11,7 +11,7 @@ import numpy as np
 @dataclass
 class EarlyStopConfig:
     enabled: bool = True
-    eval_interval: int = 20
+    eval_interval: int = 10
     global_patience: int = 3
 
     # global consistency thresholds
@@ -25,7 +25,7 @@ class EarlyStopConfig:
     min_drop: float = 0.015          # net drop ratio
     slope_thr: float = 1e-3          # normalized slope threshold
     osc_thr: float = 2.5             # std / abs(drop_abs)
-    warmup_epochs: int = 500
+    warmup_epochs: int = 100
 
     freeze_ratio_max: float = 0.2    # each eval max freeze portion of active
     min_active_keep: int = 4         # keep at least this many active partitions
