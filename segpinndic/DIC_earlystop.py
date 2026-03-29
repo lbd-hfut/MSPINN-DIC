@@ -12,7 +12,7 @@ import numpy as np
 class EarlyStopConfig:
     enabled: bool = True
     eval_interval: int = 10
-    global_patience: int = 3
+    global_patience: int = 1
 
     # global consistency thresholds
     cv_thr: float = 0.08
