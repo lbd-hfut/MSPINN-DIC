@@ -4,6 +4,7 @@ import IPython.display
 
 from segpinndic.utils.logger import switch_to_file_logger, logger
 from segpinndic.utils.jax_util import tree_index, total_size, str_tensor, partition, combine
+from segpinndic.DIC_earlystop import EarlyStopConfig, EarlyStopManager
 from segpinndic import DIC_networks, DIC_plot_trainer
 
 
@@ -360,7 +361,7 @@ def FBPINN_loss_eval(active_params, fixed_params,
     # run FBPINN 
     u = FBPINN_forward(all_params, x_batch, takes, model_fns)
     _, loss_per_partition = loss_fn(all_params, x_batch, u, takes, num_models)
-    return loss_per_partition
+    return np.array(loss_per_partition)
 
 @partial(jax.jit, static_argnums=(1,3,4))
 def _PINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, model_fns):
@@ -603,13 +604,20 @@ class FBPINNTrainer(_Trainer):
         pstep, fstep = 0, 0 # Cumulative training parameter size, Cumulative FLOPs (floating-point operations)
         start0, start1, report_time = time.time(), time.time(), 0.
         merge_active, active_params, active_opt_states, fixed_params = None, None, None, None
+        m = all_params["static"]["decomposition"]["m"]
+        early_cfg = EarlyStopConfig()
+        early_manager = EarlyStopManager(early_cfg, m)
         lossval = None
+        pending_active_override = None
         for i,active_ in enumerate(scheduler):
-
+            # if earlystop manager has override, use it instead of scheduler output
+            if pending_active_override is not None:
+                active_ = pending_active_override
+                pending_active_override = None
             # update active
             if active_ is not None:
                 active = active_
-
+                early_manager.on_active_updated(i, active)
                 # first merge latest all_params / all_opt_states
                 if i != 0:
                     all_params["trainable"] = merge_active(active_params, all_params["trainable"])
@@ -628,6 +636,8 @@ class FBPINNTrainer(_Trainer):
                 update = FBPINN_update.lower(optimiser_fn, active_opt_states,
                                              active_params, fixed_params, static_params_dynamic, static_params_static,
                                              takes, x_batch, model_fns, loss_fn, num_models).compile()
+                losss_eval = FBPINN_loss_eval.lower(active_params, fixed_params, static_params_dynamic, static_params_static,
+                                                          takes, x_batch, model_fns, loss_fn, num_models).compile()
                 logger.info(f"[i: {i}/{self.c.n_steps}] Compiling done ({time.time()-startc:.2f} s)")
                 cost_ = update.cost_analysis()
                 p = total_size(active_params["network"])
@@ -648,6 +658,16 @@ class FBPINNTrainer(_Trainer):
                                          active_params, fixed_params, static_params_dynamic,
                                          takes, x_batch, num_models)# note compiled function only accepts dynamic arguments
             pstep, fstep = pstep+p, fstep+f
+            if early_manager.need_eval(i + 1):
+                part_losses = losss_eval(active_params, fixed_params, static_params_dynamic,
+                                         takes, x_batch, num_models)
+                new_active, should_stop, info = early_manager.on_eval(i + 1, active, part_losses)
+                if len(info["frozen_ids"]) > 0:
+                    logger.info(f"[EarlyStop] Freezing partitions: {info['frozen_ids']}")
+                    pending_active_override = new_active.copy()
+                    if should_stop:
+                        logger.info(f"[EarlyStop] STOP at step {i+1}, reason={info['stop_reason']}")
+                        break
 
             # report
             lossval, start1, report_time = \
