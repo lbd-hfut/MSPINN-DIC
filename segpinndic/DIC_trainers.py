@@ -663,7 +663,7 @@ class FBPINNTrainer(_Trainer):
                                          takes, x_batch, num_models)
                 part_losses = np.array(part_losses)
                 new_active, should_stop, info = early_manager.on_eval(i + 1, active, part_losses)
-                logger.info(f"[i: {i+1}/{self.c.n_steps}] cv: {info['global']['cv']:.3e}, gap: {info['global']['gap']:.3e}, ratio: {info['global']['ratio']:.3e}, count: {info['global']['good_count']}, global_ok: {info['global']['global_ok']}")
+                # logger.info(f"[i: {i+1}/{self.c.n_steps}] cv: {info['global']['cv']:.3e}, gap: {info['global']['gap']:.3e}, ratio: {info['global']['ratio']:.3e}, count: {info['global']['good_count']}, global_ok: {info['global']['global_ok']}")
                 if should_stop:
                         logger.info(f"[EarlyStop] STOP at step {i+1}, reason={info['stop_reason']}")
                         break
