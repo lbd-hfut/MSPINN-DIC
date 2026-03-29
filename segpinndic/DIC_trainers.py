@@ -361,7 +361,7 @@ def FBPINN_loss_eval(active_params, fixed_params,
     # run FBPINN 
     u = FBPINN_forward(all_params, x_batch, takes, model_fns)
     _, loss_per_partition = loss_fn(all_params, x_batch, u, takes, num_models)
-    return np.array(loss_per_partition)
+    return loss_per_partition
 
 @partial(jax.jit, static_argnums=(1,3,4))
 def _PINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, model_fns):
@@ -661,6 +661,7 @@ class FBPINNTrainer(_Trainer):
             if early_manager.need_eval(i + 1):
                 part_losses = losss_eval(active_params, fixed_params, static_params_dynamic,
                                          takes, x_batch, num_models)
+                part_losses = np.array(part_losses)
                 new_active, should_stop, info = early_manager.on_eval(i + 1, active, part_losses)
                 if len(info["frozen_ids"]) > 0:
                     logger.info(f"[EarlyStop] Freezing partitions: {info['frozen_ids']}")
