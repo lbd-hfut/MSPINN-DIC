@@ -609,16 +609,10 @@ class FBPINNTrainer(_Trainer):
         early_cfg = EarlyStopConfig()
         early_manager = EarlyStopManager(early_cfg, m)
         lossval = None
-        pending_active_override = None
         for i,active_ in enumerate(scheduler):
-            # if earlystop manager has override, use it instead of scheduler output
-            if pending_active_override is not None:
-                active_ = pending_active_override
-                pending_active_override = None
             # update active
             if active_ is not None:
                 active = active_
-                early_manager.on_active_updated(i, active)
                 # first merge latest all_params / all_opt_states
                 if i != 0:
                     all_params["trainable"] = merge_active(active_params, all_params["trainable"])
@@ -660,24 +654,16 @@ class FBPINNTrainer(_Trainer):
                                          takes, x_batch, num_models)# note compiled function only accepts dynamic arguments
             pstep, fstep = pstep+p, fstep+f
             if early_manager.need_eval(i + 1) and i + 1 >= early_cfg.warmup_epochs:
-                local_losses = losss_eval(active_params, fixed_params, static_params_dynamic,
+                part_losses = losss_eval(active_params, fixed_params, static_params_dynamic,
                                          takes, x_batch, num_models)
-                local_losses = np.array(local_losses)
-                part_losses = np.full((all_params["static"]["decomposition"]["m"],), np.nan)
-                eval_ims = np.array(all_ims)[:local_losses.shape[0]]
-                part_losses[eval_ims] = local_losses
-                active_mask = (active != 1)
-                part_losses[active_mask] = np.nan
+                
                 new_active, should_stop, info = early_manager.on_eval(i + 1, active, part_losses)
                 
                 # logger.info(f"[i: {i+1}/{self.c.n_steps}] cv: {info['global']['cv']:.3e}, gap: {info['global']['gap']:.3e}, ratio: {info['global']['ratio']:.3e}, count: {info['global']['good_count']}, global_ok: {info['global']['global_ok']}")
                 if should_stop:
-                        logger.info(f"[EarlyStop] STOP at step {i+1}, reason={info['stop_reason']}")
-                        break
-                if len(info["frozen_ids"]) > 0:
-                    logger.info(f"[EarlyStop] Freezing partitions: {info['frozen_ids']}")
-                    pending_active_override = new_active.copy()
-
+                    logger.info(f"[EarlyStop] STOP at step {i+1}, reason={info['stop_reason']}")
+                    break
+                
             # report
             lossval, start1, report_time = \
             self._report(i + 1, start0, start1, report_time,

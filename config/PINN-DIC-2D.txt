@@ -20,7 +20,7 @@
 ############################################
 
 # n_subdomains: 区域分割
-[12,3]
+[4,1]
 
 # train_schedulers: 训练方式 ["AllActiveSchedulerND", "PointSchedulerRectangularND", "LineSchedulerRectangularND"]
 AllActiveSchedulerND
