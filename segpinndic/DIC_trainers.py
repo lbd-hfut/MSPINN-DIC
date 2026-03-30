@@ -406,7 +406,8 @@ def get_inputs(x_batch, active, all_params, decomposition):
     active = active.at[active==0].set(1)# set inactive models to active
     mask = jnp.zeros_like(active)# mask out models in training points
     mask = mask.at[training_ims].set(1)
-    active = active*mask
+    # active = active*mask
+    active = jnp.where(active == 2, 2, active*mask)
     ims_ = jnp.arange(all_params["static"]["decomposition"]["m"])
     active_ims = ims_[active==1]# assume unsorted
     fixed_ims = ims_[active==2]
@@ -539,7 +540,7 @@ class FBPINNTrainer(_Trainer):
         x_batch = self._get_x_batch(i, active, all_params, x_batch_global, decomposition)
 
         # get model takes / scheduler cuts given x_batch and active
-        takes, _, (active, cut_active, cut_fixed, cut_all, merge_active) = get_inputs(x_batch, active, all_params, decomposition)
+        takes, all_ims, (active, cut_active, cut_fixed, cut_all, merge_active) = get_inputs(x_batch, active, all_params, decomposition)
 
         # cut params / opt states (schedule)
         active_params = cut_active(all_params["trainable"]) # cut active params
@@ -557,7 +558,7 @@ class FBPINNTrainer(_Trainer):
 
         logger.info(f"[i: {i}/{self.c.n_steps}] Updating active inputs done ({time.time()-start0:.2f} s)")
 
-        return active, merge_active, active_opt_states, active_params, fixed_params, static_params, takes, x_batch
+        return active, merge_active, active_opt_states, active_params, fixed_params, static_params, takes, x_batch, all_ims
 
     def train(self):
         "Train model"
@@ -624,7 +625,7 @@ class FBPINNTrainer(_Trainer):
                     all_opt_states = tree_map_dicts(merge_active, active_opt_states, all_opt_states)
 
                 # then get new inputs to update step
-                active, merge_active, active_opt_states, active_params, fixed_params, static_params, takes, x_batch = \
+                active, merge_active, active_opt_states, active_params, fixed_params, static_params, takes, x_batch, all_ims = \
                      self._get_update_inputs(i, active, all_params, all_opt_states, x_batch_global, decomposition)
                 
                 # AOT compile update function
@@ -659,10 +660,16 @@ class FBPINNTrainer(_Trainer):
                                          takes, x_batch, num_models)# note compiled function only accepts dynamic arguments
             pstep, fstep = pstep+p, fstep+f
             if early_manager.need_eval(i + 1) and i + 1 >= early_cfg.warmup_epochs:
-                part_losses = losss_eval(active_params, fixed_params, static_params_dynamic,
+                local_losses = losss_eval(active_params, fixed_params, static_params_dynamic,
                                          takes, x_batch, num_models)
-                part_losses = np.array(part_losses)
+                local_losses = np.array(local_losses)
+
+                part_losses = np.full((all_params["static"]["decomposition"]["m"],), np.nan)
+                part_losses[np.array(all_ims)] = local_losses
+                active_mask = (active != 1)
+                part_losses[active_mask] = np.nan
                 new_active, should_stop, info = early_manager.on_eval(i + 1, active, part_losses)
+                
                 # logger.info(f"[i: {i+1}/{self.c.n_steps}] cv: {info['global']['cv']:.3e}, gap: {info['global']['gap']:.3e}, ratio: {info['global']['ratio']:.3e}, count: {info['global']['good_count']}, global_ok: {info['global']['global_ok']}")
                 if should_stop:
                         logger.info(f"[EarlyStop] STOP at step {i+1}, reason={info['stop_reason']}")
