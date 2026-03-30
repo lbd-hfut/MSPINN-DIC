@@ -663,9 +663,9 @@ class FBPINNTrainer(_Trainer):
                 local_losses = losss_eval(active_params, fixed_params, static_params_dynamic,
                                          takes, x_batch, num_models)
                 local_losses = np.array(local_losses)
-
                 part_losses = np.full((all_params["static"]["decomposition"]["m"],), np.nan)
-                part_losses[np.array(all_ims)] = local_losses
+                eval_ims = np.array(all_ims)[:local_losses.shape[0]]
+                part_losses[eval_ims] = local_losses
                 active_mask = (active != 1)
                 part_losses[active_mask] = np.nan
                 new_active, should_stop, info = early_manager.on_eval(i + 1, active, part_losses)
