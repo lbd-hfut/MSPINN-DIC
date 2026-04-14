@@ -110,7 +110,7 @@ def main():
     # 第二组：local (27组)
     # ==========================
     A_list = [0.1, 0.3, 0.5]
-    sigma_list = [50, 150, 300]
+    sigma_list = [32, 64, 128]
     mode_list = ["center", "corner", "mid"]
 
     idx = 0
