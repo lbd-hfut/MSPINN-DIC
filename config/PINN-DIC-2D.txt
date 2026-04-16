@@ -6,10 +6,10 @@
 ############################################
 
 # input_dir: 输入图像所在的文件夹路径
-C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise/
+C:/01project/SegPINN-DIC/case/illumination_Variation/local/case_27/
 
 # output_dir: 结果输出文件夹路径
-C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise/results
+C:/01project/SegPINN-DIC/case/illumination_Variation/local/case_27/results
 
 ############################################
 # 🧠 网络结构参数（一般偶尔改）
@@ -20,13 +20,13 @@ C:/01project/SegPINN-DIC/case/DIC_challenge_star/Star1NoNoise/results
 ############################################
 
 # n_subdomains: 区域分割
-[4, 1]
+[1, 1]
 
 # train_schedulers: 训练方式 ["AllActiveSchedulerND", "PointSchedulerRectangularND", "LineSchedulerRectangularND"]
 AllActiveSchedulerND
 
 # hidden_units: PINN-DIC神经元数目列表
-[32]
+[32,32,32,32,32]
 
 # network: 神经网络 ["FCN", "AdaptiveFCN", "SIREN", "AdaptiveSIREN", "ResNet", "AdaptiveResNet"， "FourierNet"]
 AdaptiveFCN
@@ -35,7 +35,7 @@ AdaptiveFCN
 5
 
 # loss_fun: 损失函数的选择 ["DIC_MSE", "DIC_ZNSSD"]
-DIC_MSE
+DIC_ZNSSD
 
 ############################################
 # 🏋️‍♂️ 训练参数（常调整）
@@ -55,7 +55,7 @@ True
 ############################################
 
 # adam_lr: Adam预热学习率
-0.01
+0.005
 
 # adam_betas: Adam动量参数(beta1, beta2)
 [0.9, 0.999]

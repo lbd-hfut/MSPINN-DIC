@@ -101,6 +101,7 @@ class Constants(ConstantsBase):
             QKBQKT_def = None,
             mask = None,
             degree = 5,
+            znssd_kernel_size = 11,
         )
 
         # Define domain decomposition
@@ -112,13 +113,6 @@ class Constants(ConstantsBase):
                 ]
             self.subdomain_ws = get_subdomain_ws(self.subdomain_xs, 1.6)
         else:
-            # nx = max(nx, 2)
-            # ny = max(ny, 2)
-            # self.subdomain_xs = [
-            #     np.linspace(xmin_roi, xmax_roi, nx), 
-            #     np.linspace(ymin_roi, ymax_roi, ny)
-            #     ]
-            # self.subdomain_ws = get_subdomain_ws(self.subdomain_xs, 1.6)
             nodes_xs = [
                 np.linspace(xmin_roi, xmax_roi, nx+1), 
                 np.linspace(ymin_roi, ymax_roi, ny+1)
