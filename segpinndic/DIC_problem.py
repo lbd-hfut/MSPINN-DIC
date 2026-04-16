@@ -204,9 +204,9 @@ class DIC_ZNSSD(Problem):
         ref_std = jnp.sqrt(ref_var)
         def_std = jnp.sqrt(def_var)
 
-        znssd_map = ((ref_img - ref_mean) / ref_std - (def_img - def_mean) / def_std) ** 2
+        znssd_map = ((ref_img - ref_mean)/ref_std*def_std - (def_img - def_mean)) ** 2
         sampled_znssd = znssd_map[yi, xi]
-        znssd = jnp.mean(sampled_znssd)*100
+        znssd = jnp.mean(sampled_znssd)
         return znssd
     
 

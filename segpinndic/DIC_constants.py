@@ -101,7 +101,7 @@ class Constants(ConstantsBase):
             QKBQKT_def = None,
             mask = None,
             degree = 5,
-            znssd_kernel_size = 11,
+            znssd_kernel_size = 7,
         )
 
         # Define domain decomposition
