@@ -61,28 +61,12 @@ class _Trainer:
                 self.c.run,
             )
         )
-        
-        save_file = os.path.join(
-            self.c.summary_out_dir,
-            "test_metrics.csv"
-        )
-        # 第一次写入表头
-        if not os.path.exists(save_file):
-            with open(save_file, "w") as f:
-                f.write(
-                    "step,loss,disp_leff,strain_leff,disp_rms,strain_rms\n"
-                )
 
-        # append 数据
-        with open(save_file, "a") as f:
-            f.write(
-                f"{i},"
-                f"{loss},"
-                f"{disp_leff},"
-                f"{strain_leff},"
-                f"{disp_rms},"
-                f"{strain_rms}\n"
-            )
+        self.writer.add_scalar("test/loss", loss, i)
+        self.writer.add_scalar("test/disp_leff", disp_leff, i)
+        self.writer.add_scalar("test/strain_leff", strain_leff, i)
+        self.writer.add_scalar("test/disp_rms", disp_rms, i)
+        self.writer.add_scalar("test/strain_rms", strain_rms, i)
             
     def _save_figs(self, i, fs):
         "Saves figures"
@@ -651,7 +635,7 @@ class FBPINNTrainer(_Trainer):
                 self._report(i, start0, start1, report_time,
                             all_params, all_opt_states,
                             active, merge_active, active_opt_states, active_params,
-                            lossval)
+                            lossval, decomposition, x_batch_global, jmaps, model_fns)
 
             # take a training step
             lossval, active_opt_states, active_params = update(active_opt_states,
@@ -664,7 +648,7 @@ class FBPINNTrainer(_Trainer):
             self._report(i + 1, start0, start1, report_time,
                         all_params, all_opt_states,
                         active, merge_active, active_opt_states, active_params,
-                        lossval)
+                        lossval, decomposition, x_batch_global, jmaps, model_fns)
 
         # cleanup
         writer.close()
@@ -681,7 +665,7 @@ class FBPINNTrainer(_Trainer):
     def _report(self, i, start0, start1, report_time,
                 all_params, all_opt_states,
                 active, merge_active, active_opt_states, active_params,
-                lossval):
+                lossval, decomposition, x_batch_global, jmaps, model_fns):
         "Report results"
 
         c = self.c
@@ -691,7 +675,7 @@ class FBPINNTrainer(_Trainer):
             loss_val = None
         else:
             loss_val = lossval.item()
-        
+
         if summary_ or model_save_:
 
             # print summary
@@ -711,6 +695,23 @@ class FBPINNTrainer(_Trainer):
                 self._save_model(i, (i, all_params, all_opt_states, active, jnp.array(loss_val) if loss_val is not None else jnp.array(jnp.nan)))
 
                 report_time += time.time()-start2
+
+        if i != 0 and test_:
+            u, v, exx, exy, eyy = self._predict(all_params, decomposition, x_batch_global, jmaps, model_fns)
+            u = np.asarray(u)
+            v = np.asarray(v)
+            exx = np.asarray(exx)
+            exy = np.asarray(exy)
+            eyy = np.asarray(eyy)
+
+            disp_leff = compute_leff(v)
+            strain_leff = compute_leff(eyy)
+            disp_rms = compute_midline_rms(v)
+            strain_rms = compute_midline_rms(eyy)
+
+            self._print_test(i, loss_val,
+                             disp_leff, strain_leff,
+                             disp_rms, strain_rms)
 
         return loss_val, start1, report_time
     
@@ -871,12 +872,12 @@ class PINNTrainer(_Trainer):
         c = self.c
         summary_,test_,model_save_ = [(i % f == 0) for f in
                                       [c.summary_freq, c.test_freq, c.model_save_freq]]
-        
+
         if lossval is None:
             loss_val = None
         else:
             loss_val = lossval.item()
-            
+
         if summary_ or model_save_:
 
             # print summary
@@ -892,11 +893,11 @@ class PINNTrainer(_Trainer):
                 # merge latest params
                 all_params["trainable"] = active_params
                 all_opt_states = active_opt_states
-                
+
                 self._save_model(i, (i, all_params, all_opt_states, jnp.array(loss_val) if loss_val is not None else jnp.array(jnp.nan)))
 
                 report_time += time.time()-start2
-                
+
         if i != 0 and test_:
             u, v, exx, exy, eyy = self._predict(all_params, x_batch_global, jmaps, model_fns)
             u = np.asarray(u)
@@ -904,14 +905,14 @@ class PINNTrainer(_Trainer):
             exx = np.asarray(exx)
             exy = np.asarray(exy)
             eyy = np.asarray(eyy)
-            
+
             disp_leff = compute_leff(v)
             strain_leff = compute_leff(eyy)
             disp_rms = compute_midline_rms(v)
             strain_rms = compute_midline_rms(eyy)
-            
-            self._print_test(i, loss_val.item(), 
-                             disp_leff, strain_leff, 
+
+            self._print_test(i, loss_val,
+                             disp_leff, strain_leff,
                              disp_rms, strain_rms)
 
         return lossval, start1, report_time
