@@ -154,7 +154,7 @@ class PlaneSchedulerRectangularND(_SubspacePointSchedulerRectangularND):
 
 if __name__ == "__main__":
 
-    from fbpinns.decompositions import RectangularDecompositionND
+    from segpinndic.DIC_decompositions import RectangularDecompositionND
 
     x = np.array([-6,-4,-2,0,2,4,6])
     

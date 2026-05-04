@@ -33,7 +33,57 @@ class _Trainer:
                 ))
         self.writer.add_scalar("loss/train", loss, i)
         self.writer.add_scalar("stats/rate", rate, i)
+        
+    def _print_test(
+        self,
+        i,
+        loss,
+        disp_leff,
+        strain_leff,
+        disp_rms,
+        strain_rms
+    ):
+        logger.info(
+            "[TEST i: %i/%i] "
+            "loss: %.6f | "
+            "disp_leff: %.4f | "
+            "strain_leff: %.4f | "
+            "disp_rms: %.6e | "
+            "strain_rms: %.6e | %s"
+            % (
+                i,
+                self.c.n_steps,
+                loss,
+                disp_leff,
+                strain_leff,
+                disp_rms,
+                strain_rms,
+                self.c.run,
+            )
+        )
+        
+        save_file = os.path.join(
+            self.c.summary_out_dir,
+            "test_metrics.csv"
+        )
+        # 第一次写入表头
+        if not os.path.exists(save_file):
+            with open(save_file, "w") as f:
+                f.write(
+                    "step,loss,disp_leff,strain_leff,disp_rms,strain_rms\n"
+                )
 
+        # append 数据
+        with open(save_file, "a") as f:
+            f.write(
+                f"{i},"
+                f"{loss},"
+                f"{disp_leff},"
+                f"{strain_leff},"
+                f"{disp_rms},"
+                f"{strain_rms}\n"
+            )
+            
     def _save_figs(self, i, fs):
         "Saves figures"
 
@@ -785,7 +835,7 @@ class PINNTrainer(_Trainer):
                 self._report(i, start0, start1, report_time,
                             all_params, all_opt_states,
                             active_opt_states, active_params,
-                            lossval)
+                            lossval, x_batch_global, jmaps, model_fns)
 
             # take a training step
             lossval, active_opt_states, active_params = update(active_opt_states,
@@ -798,7 +848,7 @@ class PINNTrainer(_Trainer):
             self._report(i + 1, start0, start1, report_time,
                         all_params, all_opt_states,
                         active_opt_states, active_params,
-                        lossval)
+                        lossval, x_batch_global, jmaps, model_fns)
 
         # cleanup
         writer.close()
@@ -815,12 +865,13 @@ class PINNTrainer(_Trainer):
     def _report(self, i, start0, start1, report_time,
                 all_params, all_opt_states,
                 active_opt_states, active_params,
-                lossval):
+                lossval, x_batch_global, jmaps, model_fns):
         "Report results"
 
         c = self.c
         summary_,test_,model_save_ = [(i % f == 0) for f in
                                       [c.summary_freq, c.test_freq, c.model_save_freq]]
+        
         if lossval is None:
             loss_val = None
         else:
@@ -845,6 +896,23 @@ class PINNTrainer(_Trainer):
                 self._save_model(i, (i, all_params, all_opt_states, jnp.array(loss_val) if loss_val is not None else jnp.array(jnp.nan)))
 
                 report_time += time.time()-start2
+                
+        if i != 0 and test_:
+            u, v, exx, exy, eyy = self._predict(all_params, x_batch_global, jmaps, model_fns)
+            u = np.asarray(u)
+            v = np.asarray(v)
+            exx = np.asarray(exx)
+            exy = np.asarray(exy)
+            eyy = np.asarray(eyy)
+            
+            disp_leff = compute_leff(v)
+            strain_leff = compute_leff(eyy)
+            disp_rms = compute_midline_rms(v)
+            strain_rms = compute_midline_rms(eyy)
+            
+            self._print_test(i, loss_val.item(), 
+                             disp_leff, strain_leff, 
+                             disp_rms, strain_rms)
 
         return lossval, start1, report_time
     
@@ -885,7 +953,131 @@ class PINNTrainer(_Trainer):
             exy = exy.at[ys, xs].set(exy_.flatten())
             eyy = eyy.at[ys, xs].set(eyy_.flatten())
         return u, v, exx, exy, eyy
-            
-            
-    
-    
+
+
+def compute_leff(v):
+    """
+    计算 leff = max(l10, p5)
+
+    Parameters
+    ----------
+    v : ndarray
+        2D 位移场，shape = (Ny, Nx)
+
+    Returns
+    -------
+    dict
+        {
+            'l10': int or np.nan,
+            'p5': int or np.nan,
+            'leff': int or np.nan,
+            'R_all': ndarray
+        }
+    """
+
+    Ny, Nx = v.shape
+
+    # ===== 真值 lambda =====
+    x = np.arange(1, Nx + 1)
+    lambda_gt = 10 + (150 - 10) / 2000 * x
+
+    # ============================================================
+    # 1. l10
+    # ============================================================
+    line_data = v[250, :]   # MATLAB 251 -> Python 250
+
+    ref_val = np.max(np.abs(line_data))
+    threshold = 0.9 * ref_val
+
+    idx = np.where(np.abs(line_data) >= threshold)[0]
+
+    if len(idx) == 0:
+        l10 = np.nan
+    else:
+        l10 = idx[0] + 1   # 转回 MATLAB-style index
+
+    # ============================================================
+    # 2. p5
+    # ============================================================
+    R_all = np.full(Nx, np.nan)
+
+    yy = np.arange(1, Ny + 1)
+
+    for i in range(Nx):
+
+        y = v[:, i]
+
+        if np.any(np.isnan(y)):
+            continue
+
+        y = y - np.mean(y)
+
+        if np.linalg.norm(y) < 1e-6:
+            continue
+
+        lam = lambda_gt[i]
+
+        c = np.cos(2 * np.pi * yy / lam)
+        s = np.sin(2 * np.pi * yy / lam)
+
+        a = np.dot(y, c)
+        b = np.dot(y, s)
+
+        R = np.sqrt(a**2 + b**2) / (
+            np.linalg.norm(y) * np.sqrt(np.sum(c**2))
+        )
+
+        R_all[i] = R
+
+    idx = np.where(R_all > 0.9)[0]
+
+    if len(idx) == 0:
+        p5 = np.nan
+    else:
+        p5 = idx[0] + 1
+
+    # ============================================================
+    # 3. leff
+    # ============================================================
+    if np.isnan(l10) and np.isnan(p5):
+        leff = np.nan
+    elif np.isnan(l10):
+        leff = p5
+    elif np.isnan(p5):
+        leff = l10
+    else:
+        leff = max(l10, p5)
+
+    return leff
+
+
+def compute_midline_rms(v):
+    """
+    计算中线位移 RMS
+
+    对应 MATLAB:
+        line_data_valid = line_data(~isnan(line_data));
+        leff = sqrt(mean(line_data_valid.^2));
+
+    Parameters
+    ----------
+    v : ndarray
+        2D 位移场, shape=(Ny, Nx)
+
+    Returns
+    -------
+    float
+        中线 RMS
+    """
+
+    # MATLAB v(251,:) -> Python v[250,:]
+    line_data = v[250, :]
+
+    line_data_valid = line_data[~np.isnan(line_data)]
+
+    if line_data_valid.size == 0:
+        return np.nan
+
+    rms = np.sqrt(np.mean(line_data_valid ** 2))
+
+    return rms

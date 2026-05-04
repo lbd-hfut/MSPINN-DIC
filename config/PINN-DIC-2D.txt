@@ -6,10 +6,10 @@
 ############################################
 
 # input_dir: 输入图像所在的文件夹路径
-./case/ring
+./case/DIC_challenge_star/Star1NoNoise
 
 # output_dir: 结果输出文件夹路径
-./case/ring/results
+./case/DIC_challenge_star/Star1NoNoise/results
 
 ############################################
 # 🧠 网络结构参数（一般偶尔改）
@@ -20,7 +20,7 @@
 ############################################
 
 # n_subdomains: 区域分割
-[2, 2]
+[1,1]
 
 # train_schedulers: 训练方式 ["AllActiveSchedulerND", "PointSchedulerRectangularND", "LineSchedulerRectangularND"]
 AllActiveSchedulerND
@@ -67,7 +67,7 @@ True
 10
 
 # test_freq: 打印测试loss频率
-1000
+10
 
 # model_save_freq: 模型保存频率
 10000
