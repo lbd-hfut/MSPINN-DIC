@@ -67,7 +67,7 @@ True
 10
 
 # test_flag: 是否打印测试信息
-True
+False
 
 # test_freq: 打印测试loss频率
 10000
