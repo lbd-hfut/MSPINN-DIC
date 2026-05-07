@@ -696,7 +696,7 @@ class FBPINNTrainer(_Trainer):
 
                 report_time += time.time()-start2
 
-        if i != 0 and test_:
+        if i != 0 and test_ and self.c.test_flag:
             u, v, exx, exy, eyy = self._predict(all_params, decomposition, x_batch_global, jmaps, model_fns)
             u = np.asarray(u)
             v = np.asarray(v)
@@ -898,7 +898,7 @@ class PINNTrainer(_Trainer):
 
                 report_time += time.time()-start2
 
-        if i != 0 and test_:
+        if i != 0 and test_ and self.c.test_flag:
             u, v, exx, exy, eyy = self._predict(all_params, x_batch_global, jmaps, model_fns)
             u = np.asarray(u)
             v = np.asarray(v)

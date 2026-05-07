@@ -26,7 +26,7 @@
 AllActiveSchedulerND
 
 # hidden_units: PINN-DIC神经元数目列表
-[32,32,32,32]
+[32,32,32,32,32,32,32]
 
 # network: 神经网络 ["FCN", "AdaptiveFCN", "SIREN", "AdaptiveSIREN", "ResNet", "AdaptiveResNet"， "FourierNet"]
 AdaptiveFCN
@@ -35,14 +35,14 @@ AdaptiveFCN
 5
 
 # loss_fun: 损失函数的选择 ["DIC_MSE", "DIC_ZNSSD"]
-DIC_ZNSSD
+DIC_MSE
 
 ############################################
 # 🏋️‍♂️ 训练参数（常调整）
 ############################################
 
 # adam_epochs: Adam轮数
-100
+8000
 
 # seed_flag: 判断是否使用种子点，使用的话请配置“Seed_Configuration.txt”
 True
@@ -66,8 +66,11 @@ True
 # summary_freq: 打印求解loss频率
 10
 
+# test_flag: 是否打印测试信息
+True
+
 # test_freq: 打印测试loss频率
-10
+10000
 
 # model_save_freq: 模型保存频率
 10000

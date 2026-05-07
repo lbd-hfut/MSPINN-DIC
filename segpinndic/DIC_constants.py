@@ -180,6 +180,7 @@ class Constants(ConstantsBase):
         # Define summary output parameters
         self.summary_freq = getattr(DICconfig, "summary_freq", 1000)        # outputs train stats to command line
         self.test_freq = getattr(DICconfig, "test_freq", 1000)              # outputs test stats to plot / file / command line
+        self.test_flag = getattr(DICconfig, "test_flag", False)              # whether to print test information
         self.model_save_freq = getattr(DICconfig, "model_save_freq", 10000)
         self.show_figures = getattr(DICconfig, "show_figures", False)       # whether to show figures
         self.save_figures = getattr(DICconfig, "save_figures", True)        # whether to save figures
