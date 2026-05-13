@@ -5,10 +5,10 @@
 ############################################
 
 # method: 选择种子点匹配方法 [Integer_pixels, Sub_pixels]
-Sub_pixels
+Integer_pixels
 
 # seeds_number: 种子点数量
-128
+32
 
 # max_workers: 并行计算线程数
 4

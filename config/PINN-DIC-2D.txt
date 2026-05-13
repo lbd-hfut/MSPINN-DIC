@@ -6,10 +6,10 @@
 ############################################
 
 # input_dir: 输入图像所在的文件夹路径
-./case/DIC_challenge_star/Star1NoNoise
+C:/Users/LBD/Desktop/视角间匹配PINN-DIC/large_baseline/baseline_10deg
 
 # output_dir: 结果输出文件夹路径
-./case/DIC_challenge_star/Star1NoNoise/results
+C:/Users/LBD/Desktop/视角间匹配PINN-DIC/large_baseline/baseline_10deg/results
 
 ############################################
 # 🧠 网络结构参数（一般偶尔改）
@@ -26,7 +26,7 @@
 AllActiveSchedulerND
 
 # hidden_units: PINN-DIC神经元数目列表
-[32,32,32,32,32,32,32]
+[32,32,32,32]
 
 # network: 神经网络 ["FCN", "AdaptiveFCN", "SIREN", "AdaptiveSIREN", "ResNet", "AdaptiveResNet"， "FourierNet"]
 AdaptiveFCN
@@ -37,15 +37,18 @@ AdaptiveFCN
 # loss_fun: 损失函数的选择 ["DIC_MSE", "DIC_ZNSSD"]
 DIC_MSE
 
+# znssd_kernel_size: ZNSSD损失函数的卷积核大小
+7
+
 ############################################
 # 🏋️‍♂️ 训练参数（常调整）
 ############################################
 
 # adam_epochs: Adam轮数
-8000
+400
 
 # seed_flag: 判断是否使用种子点，使用的话请配置“Seed_Configuration.txt”
-True
+False
 
 # seed_train_epochs: 种子点预训练轮数（不训练种子点提供网络输出的尺度系数）
 0

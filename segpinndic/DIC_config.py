@@ -64,7 +64,8 @@ ALL_KEYS = [
     "hidden_units", "network", "spline_degree",
     "adam_epochs", "seed_flag", "seed_train_epochs",
     "adam_lr", "summary_freq", "test_freq", "test_flag", "model_save_freq",
-     "show_figures",  "save_figures",  "clear_output"
+     "show_figures",  "save_figures",  "clear_output",
+     "loss_fun", "train_schedulers", "znssd_kernel_size"
 ]
 # ============================================
 # 读取DIC配置文件

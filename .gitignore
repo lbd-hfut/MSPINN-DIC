@@ -223,3 +223,4 @@ case/**/results/summaries/
 *.zip
 
 /SJTUdata
+.claude/
