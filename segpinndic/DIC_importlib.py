@@ -55,3 +55,4 @@ def seed_everything(seed_value: int):
 
 seed = 42
 seed_everything(seed)
+jax.clear_caches()
