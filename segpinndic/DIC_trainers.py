@@ -181,7 +181,7 @@ def FBPINN_model_inner(params, x, norm_fn, network_fn, unnorm_fn, window_fn):
     u_raw = network_fn(params, x_norm)# network
     u = unnorm_fn(params, u_raw)# unnormalise
     w = window_fn(params, x)# window
-    return u*w, w, u_raw
+    return u*w, w, u_raw, u
 
 def PINN_model_inner(all_params, x, norm_fn, network_fn, unnorm_fn):
     x_norm = norm_fn(all_params, x)# normalise
@@ -225,7 +225,7 @@ def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
     logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params_take))
 
     # batch over parameters and points
-    us, ws, us_raw = vmap(FBPINN_model_inner, in_axes=(f,0,None,None,None,None))(all_params_take, x_take, norm_fn, network_fn, unnorm_fn, window_fn)# (s, ud)
+    us, ws, us_raw, us_u = vmap(FBPINN_model_inner, in_axes=(f,0,None,None,None,None))(all_params_take, x_take, norm_fn, network_fn, unnorm_fn, window_fn)# (s, ud)
 
     # apply POU and sum
     u = jnp.concatenate([us, ws], axis=1)# (s, ud+1)
@@ -235,7 +235,7 @@ def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
     u = jax.ops.segment_sum(u, np_take, indices_are_sorted=False, num_segments=len(x_batch))# (n, ud)
     u = u/npou
 
-    return u, wp, us, ws, us_raw
+    return u, wp, us, ws, us_raw, us_u
 
 def PINN_model(all_params, x_batch, model_fns, verbose=True):
     "Defines PINN model"
@@ -588,6 +588,35 @@ class FBPINNTrainer(_Trainer):
         # logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params))
         model_fns = (decomposition.norm_fn, network.network_fn, decomposition.unnorm_fn, decomposition.window_fn)
 
+        # seed supervised pre-training
+        if c.seed_train_epochs > 0 and c.seed_pos is not None:
+            from segpinndic.DIC_seed_trainer import train_seeds_fbpinn
+            all_params = train_seeds_fbpinn(
+                all_params,
+                jnp.asarray(c.seed_pos, dtype=jnp.float32),
+                jnp.asarray(c.seed_uv, dtype=jnp.float32),
+                model_fns, decomposition,
+                c.seed_train_epochs,
+                c.seed_lr,
+                c.summary_freq,
+            )
+
+            # predict and visualize seed-fitted displacement field
+            from segpinndic.DIC_plot_trainer import plot_seed_prediction
+            mask = all_params["static"]["problem"]["mask"]
+            x_batch_roi = domain.sample_interior(mask)
+            x_batch_roi = jnp.asarray(x_batch_roi, dtype=jnp.float32)
+            m = all_params["static"]["decomposition"]["m"]
+            active = jnp.zeros(m, dtype=int)
+            takes, _, (_, cut_active, _, cut_all, _) = \
+                get_inputs(x_batch_roi, active, all_params, decomposition)
+            trainable_cut = cut_active(all_params["trainable"])
+            static_cut = cut_all(all_params["static"])
+            all_params_cut = {"static": static_cut, "trainable": trainable_cut}
+            u_pred = FBPINN_model(all_params_cut, x_batch_roi, takes, model_fns)[0]
+            label = f"fbpinn_roi{c.roi_id}_pair{c.pair_idx}"
+            plot_seed_prediction(u_pred[:, 0], u_pred[:, 1], mask, c.fig_out_dir, label)
+
         # initialise scheduler
         scheduler = c.scheduler(all_params=all_params, n_steps=c.n_steps, **c.scheduler_kwargs)
 
@@ -799,6 +828,28 @@ class PINNTrainer(_Trainer):
         mu_, sd_ = c.decomposition_init_kwargs["unnorm"]
         unnorm_fn = lambda u: DIC_networks.unnorm(mu_, sd_, u)
         model_fns = (domain.norm_fn, network.network_fn, unnorm_fn)
+
+        # seed supervised pre-training
+        if c.seed_train_epochs > 0 and c.seed_pos is not None:
+            from segpinndic.DIC_seed_trainer import train_seeds_pinn
+            all_params = train_seeds_pinn(
+                all_params,
+                jnp.asarray(c.seed_pos, dtype=jnp.float32),
+                jnp.asarray(c.seed_uv, dtype=jnp.float32),
+                model_fns,
+                c.seed_train_epochs,
+                c.seed_lr,
+                c.summary_freq,
+            )
+
+            # predict and visualize seed-fitted displacement field
+            from segpinndic.DIC_plot_trainer import plot_seed_prediction
+            mask = all_params["static"]["problem"]["mask"]
+            x_batch_roi = domain.sample_interior(mask)
+            x_batch_roi = jnp.asarray(x_batch_roi, dtype=jnp.float32)
+            u_pred, _ = PINN_model(all_params, x_batch_roi, model_fns)
+            label = f"pinn_roi{c.roi_id}_pair{c.pair_idx}"
+            plot_seed_prediction(u_pred[:, 0], u_pred[:, 1], mask, c.fig_out_dir, label)
 
         # common initialisation
         (optimiser, all_opt_states, optimiser_fn, loss_fn, key,

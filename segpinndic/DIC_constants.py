@@ -68,6 +68,7 @@ class Constants(ConstantsBase):
         
         # image shape
         self.roi_id = roi_id
+        self.pair_idx = None  # set by DIC_analysis before training
         roi = BufferManager.mask[roi_id]
         roi = np.asarray(roi)
         assert roi.ndim == 2, "ROI must be (H, W) bool array"
@@ -171,11 +172,18 @@ class Constants(ConstantsBase):
         # Define optimisation parameters
         self.ns = ((1,),)# batch_shape for placeholder
         self.n_test = (200,)# batch_shape for test data
+        self.seed_lr = getattr(DICconfig, "adam_lr", 1e-3)
+        self.dic_lr = getattr(DICconfig, "dic_lr", self.seed_lr)
         self.optimiser = optax.adam
         self.optimiser_kwargs = dict(
-            learning_rate=getattr(DICconfig, "adam_lr", 1e-3)
+            learning_rate=self.dic_lr
             )
         self.seed = seed
+
+        # seed supervised pre-training
+        self.seed_pos = None        # (N,2) seed point coordinates
+        self.seed_uv = None         # (N,2) seed point displacements
+        self.seed_train_epochs = 0  # number of seed pre-training steps
 
         # Define summary output parameters
         self.summary_freq = getattr(DICconfig, "summary_freq", 1000)        # outputs train stats to command line

@@ -123,6 +123,7 @@ class CalcSeeds:
         seed_Gen = seed_generator(Seed_config)
         self.seed_points_list = seed_Gen.seed_points_list
         self.method = Seed_config.method
+        self.n_seeds = Seed_config.seeds_number
         
     # ============================================
     # Step 1: 计算单个种子点
@@ -181,6 +182,9 @@ class CalcSeeds:
     # 主入口：处理多个种子点
     # ============================================
     def analyze(self) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        if self.method == "SIFT":
+            return self._analyze_sift()
+
         # 处理各种子点
         seed_pos_list, seed_uv_list = [], []
         for seed_points in self.seed_points_list:
@@ -244,7 +248,141 @@ class CalcSeeds:
             seed_pos_list.append(seed_pos)
             seed_uv_list.append(seed_uv)
         return seed_pos_list, seed_uv_list
-    
+
+    def _analyze_sift(self) -> Tuple[List, List]:
+        """SIFT 特征匹配 + 网格优选种子点。
+
+        将 ROI 外接矩形等分为 seeds_number 个网格单元，
+        每个单元内选 SIFT 匹配质量（response / distance）最好的点。
+        """
+        import cv2
+
+        ref_img = np.asarray(BufferManager.refImg, dtype=np.uint8)
+        def_img = np.asarray(BufferManager.defImg, dtype=np.uint8)
+
+        sift = cv2.SIFT_create()
+        kp1, des1 = sift.detectAndCompute(ref_img, None)
+        kp2, des2 = sift.detectAndCompute(def_img, None)
+
+        if des1 is None or des2 is None or len(kp1) < 2 or len(kp2) < 2:
+            logger.warning("[SIFT] Not enough keypoints")
+            empty = [jnp.zeros((0, 2), dtype=jnp.float32) for _ in BufferManager.mask]
+            return empty, empty
+
+        flann = cv2.FlannBasedMatcher(
+            dict(algorithm=1, trees=5),  # FLANN_INDEX_KDTREE
+            dict(checks=50))
+        raw_matches = flann.knnMatch(des1, des2, k=2)
+
+        good = []
+        for pair in raw_matches:
+            if len(pair) < 2:
+                continue
+            m, n = pair
+            if m.distance < 0.75 * n.distance:
+                good.append(m)
+
+        logger.info(f"[SIFT] {len(good)}/{len(raw_matches)} matches passed Lowe's ratio test")
+
+        if len(good) == 0:
+            empty = [jnp.zeros((0, 2), dtype=jnp.float32) for _ in BufferManager.mask]
+            return empty, empty
+
+        # 提取匹配点坐标与质量
+        pts_ref = np.array([kp1[m.queryIdx].pt for m in good])      # (N, 2)
+        pts_def = np.array([kp2[m.trainIdx].pt for m in good])
+        responses = np.array([kp1[m.queryIdx].response for m in good])
+        distances = np.array([m.distance for m in good])
+        quality = responses / (distances + 1e-6)
+
+        uv = pts_def - pts_ref
+
+        seed_pos_list, seed_uv_list = [], []
+        for roi_id, mask in enumerate(BufferManager.mask):
+            mask_np = np.asarray(mask)
+            H, W = mask_np.shape
+            ys_roi, xs_roi = np.where(mask_np)
+            if len(xs_roi) == 0:
+                seed_pos_list.append(jnp.zeros((0, 2), dtype=jnp.float32))
+                seed_uv_list.append(jnp.zeros((0, 2), dtype=jnp.float32))
+                continue
+
+            # 筛选 ROI 内的匹配点
+            pts_int = np.rint(pts_ref).astype(int)
+            inside = np.array([
+                0 <= x < W and 0 <= y < H and mask_np[y, x]
+                for x, y in pts_int
+            ])
+            idx_roi = np.where(inside)[0]
+            if len(idx_roi) == 0:
+                logger.warning(f"[SIFT] No matches inside ROI {roi_id}")
+                seed_pos_list.append(jnp.zeros((0, 2), dtype=jnp.float32))
+                seed_uv_list.append(jnp.zeros((0, 2), dtype=jnp.float32))
+                continue
+
+            pts_roi = pts_ref[idx_roi]
+            uv_roi = uv[idx_roi]
+            qual_roi = quality[idx_roi]
+
+            # 网格划分
+            xmin, xmax = xs_roi.min(), xs_roi.max()
+            ymin, ymax = ys_roi.min(), ys_roi.max()
+            aspect = (xmax - xmin + 1) / (ymax - ymin + 1)
+            n_cols = max(1, int(round(np.sqrt(self.n_seeds * aspect))))
+            n_rows = max(1, int(round(self.n_seeds / n_cols)))
+            cols_edges = np.linspace(xmin, xmax + 1, n_cols + 1)
+            rows_edges = np.linspace(ymin, ymax + 1, n_rows + 1)
+
+            # 每个网格单元选最佳匹配
+            cell_seed_pos = []
+            cell_seed_uv = []
+            for r in range(n_rows):
+                for c in range(n_cols):
+                    x0, x1 = int(cols_edges[c]), int(cols_edges[c + 1])
+                    y0, y1 = int(rows_edges[r]), int(rows_edges[r + 1])
+                    in_cell = (
+                        (pts_roi[:, 0] >= x0) & (pts_roi[:, 0] < x1) &
+                        (pts_roi[:, 1] >= y0) & (pts_roi[:, 1] < y1)
+                    )
+                    idx_cell = np.where(in_cell)[0]
+                    if len(idx_cell) == 0:
+                        continue
+                    best = idx_cell[np.argmax(qual_roi[idx_cell])]
+                    cell_seed_pos.append(pts_roi[best])
+                    cell_seed_uv.append(uv_roi[best])
+
+            if len(cell_seed_pos) < 3:
+                logger.warning(f"[SIFT] ROI {roi_id}: only {len(cell_seed_pos)} cells filled, skip")
+                seed_pos_list.append(jnp.zeros((0, 2), dtype=jnp.float32))
+                seed_uv_list.append(jnp.zeros((0, 2), dtype=jnp.float32))
+                continue
+
+            # MAD 离群值剔除
+            uv_arr = np.array(cell_seed_uv, dtype=np.float32)
+            median_u = np.median(uv_arr[:, 0])
+            median_v = np.median(uv_arr[:, 1])
+            mad_u = np.median(np.abs(uv_arr[:, 0] - median_u))
+            mad_v = np.median(np.abs(uv_arr[:, 1] - median_v))
+            thresh = 4.5
+            inlier = (
+                (np.abs(uv_arr[:, 0] - median_u) < thresh * mad_u + 1e-6) &
+                (np.abs(uv_arr[:, 1] - median_v) < thresh * mad_v + 1e-6)
+            )
+            n_out = np.sum(~inlier)
+            if n_out > 0:
+                logger.info(f"[SIFT] ROI {roi_id}: MAD removed {n_out} outliers")
+
+            cell_seed_pos = [cell_seed_pos[i] for i in range(len(cell_seed_pos)) if inlier[i]]
+            cell_seed_uv = [cell_seed_uv[i] for i in range(len(cell_seed_uv)) if inlier[i]]
+
+            logger.info(f"[SIFT] ROI {roi_id}: {len(cell_seed_pos)} seed points selected "
+                        f"({n_rows}x{n_cols} grid)")
+
+            seed_pos_list.append(jnp.asarray(cell_seed_pos, dtype=jnp.float32))
+            seed_uv_list.append(jnp.asarray(cell_seed_uv, dtype=jnp.float32))
+
+        return seed_pos_list, seed_uv_list
+
     def _get_coarse_retroi(self, x: int, y: int) -> RectangleROI:
         """获取感兴趣区域"""
         rectroi = RectangleROI()

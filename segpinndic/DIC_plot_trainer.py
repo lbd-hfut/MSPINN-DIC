@@ -218,6 +218,48 @@ def _nonzero_minmax(arr):
     return np.min(arr_nz), np.max(arr_nz)
 
 
+def plot_seed_prediction(u_roi, v_roi, mask, save_dir, label):
+    """Plot predicted u, v displacement fields after seed training.
+
+    Args:
+        u_roi: (N,) u displacement at ROI points
+        v_roi: (N,) v displacement at ROI points
+        mask: (H, W) boolean ROI mask
+        save_dir: base figure output directory (e.g. c.fig_out_dir)
+        label: filename label (e.g. "pinn_roi0_pair1")
+    """
+    u_roi = np.array(u_roi)
+    v_roi = np.array(v_roi)
+
+    u_img = np.full(mask.shape, np.nan, dtype=np.float32)
+    v_img = np.full(mask.shape, np.nan, dtype=np.float32)
+    ys, xs = np.where(mask)
+    u_img[ys, xs] = u_roi
+    v_img[ys, xs] = v_roi
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5), dpi=150)
+
+    im1 = ax1.imshow(u_img, cmap='jet', interpolation='nearest')
+    ax1.set_title("u (seed prediction)", fontsize=10)
+    ax1.axis('off')
+    plt.colorbar(im1, ax=ax1)
+
+    im2 = ax2.imshow(v_img, cmap='jet', interpolation='nearest')
+    ax2.set_title("v (seed prediction)", fontsize=10)
+    ax2.axis('off')
+    plt.colorbar(im2, ax=ax2)
+
+    plt.tight_layout()
+
+    seed_dir = os.path.join(save_dir, "seed")
+    if not os.path.exists(seed_dir):
+        os.makedirs(seed_dir)
+    file_path = os.path.join(seed_dir, f"seed_{label}.png")
+    fig.savefig(file_path, bbox_inches='tight')
+    logger.info(f"Seed prediction saved to {file_path}")
+    plt.close(fig)
+
+
 def result_uv_strain_plot(u, v, exx, exy, eyy,
                           layout=[2,3], WH=[5,4],
                           save_dir=None, filename=None):

@@ -59,7 +59,7 @@ def main(
                 logger.info(f"ROI_id{roi_id+1}: umax: {jnp.max(seed_uv[roi_id][:,0])}, v_max: {jnp.max(seed_uv[roi_id][:,1])}")
                 logger.info(f"ROI_id{roi_id+1}: umin: {jnp.min(seed_uv[roi_id][:,0])}, v_min: {jnp.min(seed_uv[roi_id][:,1])}")
         else:
-            BufferManager.scale_uv = [jnp.asarray((35.,0.,45.,30.)) for roi_id in range(N_roi)]
+            BufferManager.scale_uv = [jnp.asarray((0.,0.,1.,1.)) for roi_id in range(N_roi)]
         u = v = exx = exy = eyy = jnp.zeros_like(BufferManager.refImg)
         for roi_id in range(N_roi):
             logger.info(f"Processing imgage pair {i+1}/{N_pairs} ROI {roi_id+1}/{N_roi}")
@@ -72,6 +72,10 @@ def main(
                 BufferManager.scale_uv[roi_id][2],
                 BufferManager.scale_uv[roi_id][3]
             ])
+            # 小变形（scale_uv 均 < 20）时跳过种子点预训练
+            do_seed = DIC_config.seed_flag and not bool(jnp.all(BufferManager.scale_uv[roi_id] < 20))
+            if DIC_config.seed_flag:
+                logger.info(f"[Seed {'Enable ' if do_seed else 'Disable'}] ROI {roi_id+1}, scale_uv={BufferManager.scale_uv[roi_id]}")
             c.load_kwargs(
                 decomposition_init_kwargs=dict(
                     subdomain_xs=c.subdomain_xs,
@@ -81,8 +85,12 @@ def main(
                     ref_img = BufferManager.refImg,
                     QKBQKT_def = BufferManager.QKBQKT_def_DIC,
                     mask = BufferManager.mask[roi_id],
-                    degree = DIC_config.spline_degree)
+                    degree = DIC_config.spline_degree),
+                seed_pos=seed_pos[roi_id] if do_seed else None,
+                seed_uv=seed_uv[roi_id] if do_seed else None,
+                seed_train_epochs=DIC_config.seed_train_epochs if do_seed else 0,
             )
+            c.pair_idx = i + 1
             run = trainer(c)
             _, u_, v_, exx_, exy_, eyy_, x_batch_global_ = run.train()
             if N_roi == 1:
