@@ -6,10 +6,10 @@
 ############################################
 
 # input_dir: 输入图像所在的文件夹路径
-C:/Users/LBD/Desktop/视角间匹配PINN-DIC/large_baseline/baseline_60deg
+C:/Users/LBD/Desktop/视角间匹配PINN-DIC/illumination_changes/global/alpha_0.8_delta_0
 
 # output_dir: 结果输出文件夹路径
-C:/Users/LBD/Desktop/视角间匹配PINN-DIC/large_baseline/baseline_60deg/results
+C:/Users/LBD/Desktop/视角间匹配PINN-DIC/illumination_changes/global/alpha_0.8_delta_0/results
 
 ############################################
 # 🧠 网络结构参数（一般偶尔改）
@@ -26,7 +26,7 @@ C:/Users/LBD/Desktop/视角间匹配PINN-DIC/large_baseline/baseline_60deg/resul
 AllActiveSchedulerND
 
 # hidden_units: PINN-DIC神经元数目列表
-[32,32]
+[32,32,32,32]
 
 # network: 神经网络 ["FCN", "AdaptiveFCN", "SIREN", "AdaptiveSIREN", "ResNet", "AdaptiveResNet"， "FourierNet"]
 AdaptiveFCN
@@ -35,7 +35,7 @@ AdaptiveFCN
 5
 
 # loss_fun: 损失函数的选择 ["DIC_MSE", "DIC_ZNSSD"]
-DIC_MSE
+DIC_ZNSSD
 
 # znssd_kernel_size: ZNSSD损失函数的卷积核大小
 21
@@ -45,7 +45,7 @@ DIC_MSE
 ############################################
 
 # adam_epochs: Adam轮数
-1500
+1000
 
 # seed_flag: 判断是否使用种子点，使用的话请配置“Seed_Configuration.txt”
 True

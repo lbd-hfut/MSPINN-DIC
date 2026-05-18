@@ -73,7 +73,7 @@ def main(
                 BufferManager.scale_uv[roi_id][3]
             ])
             # 小变形（scale_uv 均 < 20）时跳过种子点预训练
-            do_seed = DIC_config.seed_flag and not bool(jnp.all(BufferManager.scale_uv[roi_id] < 20))
+            do_seed = DIC_config.seed_flag and not bool(jnp.all(BufferManager.scale_uv[roi_id] < 5))
             if DIC_config.seed_flag:
                 logger.info(f"[Seed {'Enable ' if do_seed else 'Disable'}] ROI {roi_id+1}, scale_uv={BufferManager.scale_uv[roi_id]}")
             c.load_kwargs(
