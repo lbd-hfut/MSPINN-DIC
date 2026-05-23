@@ -6,10 +6,10 @@
 ############################################
 
 # input_dir: 输入图像所在的文件夹路径
-C:/Users/LBD/Desktop/视角间匹配PINN-DIC/illumination_changes/global/alpha_0.8_delta_0
+C:/Users/LBD/Desktop/视角间匹配PINN-DIC/star-3D-simulation/baseline_80mm
 
 # output_dir: 结果输出文件夹路径
-C:/Users/LBD/Desktop/视角间匹配PINN-DIC/illumination_changes/global/alpha_0.8_delta_0/results
+C:/Users/LBD/Desktop/视角间匹配PINN-DIC/star-3D-simulation/baseline_80mm/results
 
 ############################################
 # 🧠 网络结构参数（一般偶尔改）
@@ -26,7 +26,7 @@ C:/Users/LBD/Desktop/视角间匹配PINN-DIC/illumination_changes/global/alpha_0
 AllActiveSchedulerND
 
 # hidden_units: PINN-DIC神经元数目列表
-[32,32,32,32]
+[32,32,32,32,32]
 
 # network: 神经网络 ["FCN", "AdaptiveFCN", "SIREN", "AdaptiveSIREN", "ResNet", "AdaptiveResNet"， "FourierNet"]
 AdaptiveFCN
@@ -35,10 +35,10 @@ AdaptiveFCN
 5
 
 # loss_fun: 损失函数的选择 ["DIC_MSE", "DIC_ZNSSD"]
-DIC_ZNSSD
+DIC_MSE
 
 # znssd_kernel_size: ZNSSD损失函数的卷积核大小
-21
+7
 
 ############################################
 # 🏋️‍♂️ 训练参数（常调整）
@@ -47,21 +47,33 @@ DIC_ZNSSD
 # adam_epochs: Adam轮数
 1000
 
+# lbfgs_epochs: L-BFGS精调轮数（0表示不使用；建议在Adam之后使用，通常100-500）
+0
+
+# lbfgs_history_size: L-BFGS历史窗口大小（存储最近m步的梯度/位置信息）
+10
+
+# lbfgs_maxls: L-BFGS线搜索最大迭代步数
+15
+
+# lbfgs_lr: L-BFGS线搜索最大步长（>0时作为max_stepsize限制搜索范围；<=0时使用默认值1.0）
+1.0
+
 # seed_flag: 判断是否使用种子点，使用的话请配置“Seed_Configuration.txt”
 True
 
 # seed_train_epochs: 种子点预训练轮数（不训练种子点提供网络输出的尺度系数）
-1000
+20000
 
 ############################################
 # ⚙️ 优化器细节参数（很少改）
 ############################################
 
 # adam_lr: 种子点预训练学习率
-0.01
+0.005
 
 # dic_lr: DIC正式训练学习率（种子预训练后使用，通常应小于adam_lr）
-0.001
+0.005
 
 # adam_betas: Adam动量参数(beta1, beta2)
 [0.9, 0.999]

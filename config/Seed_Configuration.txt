@@ -8,7 +8,7 @@
 SIFT
 
 # seeds_number: 种子点数量
-128
+1024
 
 # max_workers: 并行计算线程数
 4

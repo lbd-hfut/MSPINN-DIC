@@ -14,6 +14,7 @@ import shutil
 import glob
 import pickle
 import optax
+import jaxopt
 import socket
 from jax import random, jit, vmap, value_and_grad, jvp
 import jax.numpy as jnp

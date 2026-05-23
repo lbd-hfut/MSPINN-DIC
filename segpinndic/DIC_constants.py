@@ -112,7 +112,7 @@ class Constants(ConstantsBase):
                 np.linspace(xmin_roi, xmax_roi, 5), 
                 np.linspace(ymin_roi, ymax_roi, 5)
                 ]
-            self.subdomain_ws = get_subdomain_ws(self.subdomain_xs, 1.6)
+            self.subdomain_ws = get_subdomain_ws(self.subdomain_xs, 2.4)
         else:
             nodes_xs = [
                 np.linspace(xmin_roi, xmax_roi, nx+1), 
@@ -179,6 +179,12 @@ class Constants(ConstantsBase):
             learning_rate=self.dic_lr
             )
         self.seed = seed
+
+        # L-BFGS refinement parameters
+        self.lbfgs_epochs = getattr(DICconfig, "lbfgs_epochs", 0)
+        self.lbfgs_history_size = getattr(DICconfig, "lbfgs_history_size", 10)
+        self.lbfgs_maxls = getattr(DICconfig, "lbfgs_maxls", 15)
+        self.lbfgs_lr = getattr(DICconfig, "lbfgs_lr", 1.0)
 
         # seed supervised pre-training
         self.seed_pos = None        # (N,2) seed point coordinates

@@ -1,4 +1,4 @@
-from segpinndic.DIC_importlib import os, time, pickle, jax, jnp, np, plt, SummaryWriter, \
+from segpinndic.DIC_importlib import os, time, pickle, jax, jaxopt, jnp, np, plt, SummaryWriter, \
     jit, vmap, value_and_grad, jvp, partial, random, optax
 import IPython.display
 
@@ -628,7 +628,7 @@ class FBPINNTrainer(_Trainer):
         pstep, fstep = 0, 0 # Cumulative training parameter size, Cumulative FLOPs (floating-point operations)
         start0, start1, report_time = time.time(), time.time(), 0.
         merge_active, active_params, active_opt_states, fixed_params = None, None, None, None
-        lossval = None
+        lossval, i = None, 0
         for i,active_ in enumerate(scheduler):
 
             # update active
@@ -683,9 +683,62 @@ class FBPINNTrainer(_Trainer):
         writer.close()
         logger.info(f"[i: {i+1}/{self.c.n_steps}] Training complete")
 
-        # return trained parameters
+        # return trained parameters (final merge)
         all_params["trainable"] = merge_active(active_params, all_params["trainable"])
         all_opt_states = tree_map_dicts(merge_active, active_opt_states, all_opt_states)
+
+        # L-BFGS refinement on all subdomains
+        if c.lbfgs_epochs > 0:
+            logger.info(f"Starting L-BFGS refinement on all subdomains ({c.lbfgs_epochs} steps)...")
+
+            m = all_params["static"]["decomposition"]["m"]
+            active_all = jnp.ones(m, dtype=int)
+
+            x_batch_all = self._get_x_batch(0, active_all, all_params, x_batch_global, decomposition)
+            takes_all, _, (active_all, cut_active_all, cut_fixed_all, cut_all, merge_active_all) = \
+                get_inputs(x_batch_all, active_all, all_params, decomposition)
+
+            active_params_all = cut_active_all(all_params["trainable"])
+            fixed_params_empty = cut_fixed_all(all_params["trainable"])
+            static_params_all = cut_all(all_params["static"])
+
+            static_dynamic, static_static = partition(static_params_all)
+
+            solver = jaxopt.LBFGS(
+                fun=lambda ap, fp, sp_dyn, tk, xb: FBPINN_loss(
+                    ap, fp, combine(sp_dyn, static_static), tk, xb, model_fns, loss_fn),
+                maxiter=1,
+                tol=0.0,
+                maxls=c.lbfgs_maxls,
+                history_size=c.lbfgs_history_size,
+                stepsize=0.0,
+                max_stepsize=c.lbfgs_lr if c.lbfgs_lr > 0 else 1.0,
+                implicit_diff=False,
+            )
+
+            lbfgs_state = solver.init_state(
+                active_params_all, fixed_params_empty, static_dynamic,
+                takes_all, x_batch_all
+            )
+
+            # log initial loss before first step
+            loss_init = lbfgs_state.value
+            logger.info(f"[L-BFGS: 0/{c.lbfgs_epochs}] initial loss: {loss_init.item():.6e}")
+
+            start_lbfgs = time.time()
+            for j in range(c.lbfgs_epochs):
+                active_params_all, lbfgs_state = solver.update(
+                    active_params_all, lbfgs_state,
+                    fixed_params_empty, static_dynamic,
+                    takes_all, x_batch_all
+                )
+                if (j + 1) % c.summary_freq == 0 or j == 0:
+                    lossval_lbfgs = lbfgs_state.value
+                    elapsed = time.time() - start_lbfgs
+                    logger.info(f"[L-BFGS: {j+1}/{c.lbfgs_epochs}] loss: {lossval_lbfgs.item():.6e} | {elapsed:.1f}s")
+
+            all_params["trainable"] = merge_active_all(active_params_all, all_params["trainable"])
+            logger.info(f"L-BFGS refinement done ({time.time()-start_lbfgs:.2f} s)")
 
         u, v, exx, exy, eyy = self._predict(all_params, decomposition, x_batch_global, jmaps, model_fns)
         
@@ -878,7 +931,7 @@ class PINNTrainer(_Trainer):
         # train loop
         pstep, fstep = 0, 0
         start0, start1, report_time = time.time(), time.time(), 0.
-        lossval = None
+        lossval, i = None, 0
         for i in range(c.n_steps):
 
             if i == 0:
@@ -902,6 +955,46 @@ class PINNTrainer(_Trainer):
                         active_opt_states, active_params,
                         lossval, x_batch_global, jmaps, model_fns)
 
+        # L-BFGS refinement phase
+        if c.lbfgs_epochs > 0:
+            logger.info(f"Starting L-BFGS refinement ({c.lbfgs_epochs} steps)...")
+
+            static_dynamic, static_static = partition(static_params)
+
+            solver = jaxopt.LBFGS(
+                fun=lambda params, sp_dyn, xb: PINN_loss(
+                    params, combine(sp_dyn, static_static), xb, model_fns, loss_fn),
+                maxiter=1,
+                tol=0.0,
+                maxls=c.lbfgs_maxls,
+                history_size=c.lbfgs_history_size,
+                stepsize=0.0,
+                max_stepsize=c.lbfgs_lr if c.lbfgs_lr > 0 else 1.0,
+                implicit_diff=False,
+            )
+
+            lbfgs_state = solver.init_state(
+                active_params, static_dynamic, x_batch
+            )
+
+            # log initial loss before first step
+            loss_init = lbfgs_state.value
+            logger.info(f"[L-BFGS: 0/{c.lbfgs_epochs}] initial loss: {loss_init.item():.6e}")
+
+            start_lbfgs = time.time()
+            for j in range(c.lbfgs_epochs):
+                active_params, lbfgs_state = solver.update(
+                    active_params, lbfgs_state,
+                    static_dynamic, x_batch
+                )
+                if (j + 1) % c.summary_freq == 0 or j == 0:
+                    lossval = lbfgs_state.value
+                    elapsed = time.time() - start_lbfgs
+                    logger.info(f"[L-BFGS: {j+1}/{c.lbfgs_epochs}] loss: {lossval.item():.6e} | {elapsed:.1f}s")
+
+            lossval = lbfgs_state.value
+            logger.info(f"L-BFGS refinement done ({time.time()-start_lbfgs:.2f} s)")
+
         # cleanup
         writer.close()
         logger.info(f"[i: {i+1}/{self.c.n_steps}] Training complete")
@@ -911,7 +1004,7 @@ class PINNTrainer(_Trainer):
         all_opt_states = active_opt_states
 
         u, v, exx, exy, eyy = self._predict(all_params, x_batch_global, jmaps, model_fns)
-        
+
         return all_params, u, v, exx, exy, eyy, x_batch_global
 
     def _report(self, i, start0, start1, report_time,
