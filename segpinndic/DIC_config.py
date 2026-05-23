@@ -66,7 +66,8 @@ ALL_KEYS = [
     "adam_lr", "dic_lr", "summary_freq", "test_freq", "test_flag", "model_save_freq",
      "show_figures",  "save_figures",  "clear_output",
      "loss_fun", "train_schedulers", "znssd_kernel_size",
-     "lbfgs_epochs", "lbfgs_history_size", "lbfgs_maxls", "lbfgs_lr"
+     "lbfgs_epochs", "lbfgs_history_size", "lbfgs_maxls", "lbfgs_lr",
+     "seed_smooth_lambda", "seed_smooth_npoints"
 ]
 # ============================================
 # 读取DIC配置文件

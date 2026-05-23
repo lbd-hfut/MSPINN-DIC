@@ -26,39 +26,57 @@ from segpinndic.utils.jax_util import partition, combine
 # PINN Seed Training
 # ==============================================================================
 
-def PINN_seed_loss(active_params, static_params, seed_x, seed_uv, model_fns):
-    """MSE between unnormalized network output and seed pixel displacements."""
+def PINN_seed_loss(active_params, static_params, seed_x, seed_uv, model_fns,
+                   smooth_x=None, smooth_lambda=0.0):
+    """MSE + L2 gradient-norm smoothness penalty."""
     norm_fn, network_fn, unnorm_fn = model_fns
     all_params = {"static": static_params, "trainable": active_params}
     u, _ = vmap(PINN_model_inner, in_axes=(None, 0, None, None, None))(
         all_params, seed_x, norm_fn, network_fn, unnorm_fn)
-    return jnp.mean((u - seed_uv) ** 2)
+    loss = jnp.mean((u - seed_uv) ** 2)
+
+    # smooth_x.shape[0] is concrete at trace time → safe for Python if
+    if smooth_x.shape[0] > 0:
+        def u_at_x(x):
+            u_out, _ = PINN_model_inner(all_params, x, norm_fn, network_fn, unnorm_fn)
+            return u_out
+        jac = vmap(jax.jacrev(u_at_x))(smooth_x)          # (M, 2, 2)
+        grad_sq = jnp.sum(jac ** 2, axis=(1, 2))          # (M,)  sum over [u,v]×[dx,dy]
+        loss = loss + smooth_lambda * jnp.mean(grad_sq)
+
+    return loss
 
 
 @partial(jit, static_argnums=(0, 4, 7))
 def PINN_seed_update(optimiser_fn, active_opt_states,
                      active_params, static_params_dynamic, static_params_static,
-                     seed_x, seed_uv, model_fns):
+                     seed_x, seed_uv, model_fns,
+                     smooth_x=None, smooth_lambda=0.0):
     static_params = combine(static_params_dynamic, static_params_static)
     lossval, grads = value_and_grad(PINN_seed_loss, argnums=0)(
-        active_params, static_params, seed_x, seed_uv, model_fns)
+        active_params, static_params, seed_x, seed_uv, model_fns,
+        smooth_x, smooth_lambda)
     updates, active_opt_states = optimiser_fn(grads, active_opt_states, active_params)
     active_params = optax.apply_updates(active_params, updates)
     return lossval, active_opt_states, active_params
 
 
 def train_seeds_pinn(all_params, seed_x, seed_uv, model_fns,
-                     n_steps, learning_rate, summary_freq):
-    """PINN 种子点监督预训练。
+                     n_steps, learning_rate, summary_freq,
+                     smooth_lambda=0.0, smooth_npoints=0, key=jax.random.PRNGKey(0)):
+    """PINN seed supervised pre-training with optional smoothness regularisation.
 
     Args:
-        all_params: 已初始化的模型参数字典 {"static": ..., "trainable": ...}
-        seed_x: (N, 2) 种子点像素坐标
-        seed_uv: (N, 2) 种子点位移 (像素)
+        all_params: model param dict {"static": ..., "trainable": ...}
+        seed_x:   (N, 2) seed point pixel coordinates
+        seed_uv:  (N, 2) seed point displacements (pixels)
         model_fns: (norm_fn, network_fn, unnorm_fn)
-        n_steps: Adam 训练步数
-        learning_rate: 学习率
-        summary_freq: 日志输出频率
+        n_steps:  Adam training steps
+        learning_rate: learning rate
+        summary_freq: log frequency
+        smooth_lambda:  gradient-norm penalty weight (0 = disabled)
+        smooth_npoints: number of ROI collocation points for smoothness (0 = disabled)
+        key:    JAX PRNG key for smooth point sampling
 
     Returns:
         all_params with updated trainable params.
@@ -66,7 +84,21 @@ def train_seeds_pinn(all_params, seed_x, seed_uv, model_fns,
     if seed_x is None or seed_uv is None or n_steps <= 0:
         return all_params
 
-    # 为种子训练创建独立的 optimizer（与后续 photometric 训练隔离）
+    # Generate smoothness collocation points (ROI interior)
+    if smooth_lambda > 0 and smooth_npoints > 0:
+        mask = all_params["static"]["problem"]["mask"]
+        ys, xs = jnp.where(mask)
+        key, subkey = jax.random.split(key)
+        idx = jax.random.choice(subkey, len(xs), (smooth_npoints,), replace=True)
+        smooth_x = jnp.stack(
+            [xs[idx].astype(jnp.float32), ys[idx].astype(jnp.float32)], axis=-1)
+        logger.info(f"[Seed-PINN] Smoothness: λ={smooth_lambda}, "
+                    f"{smooth_npoints} collocation points")
+    else:
+        smooth_x = jnp.zeros((0, 2), dtype=jnp.float32)  # empty array for jit
+        smooth_lambda = 0.0
+
+    # Independent optimizer for seed training
     optimiser = optax.adam(learning_rate)
     active_params = all_params["trainable"]
     opt_states = optimiser.init(active_params)
@@ -75,24 +107,25 @@ def train_seeds_pinn(all_params, seed_x, seed_uv, model_fns,
     static_params = all_params["static"]
     static_params_dynamic, static_params_static = partition(static_params)
 
-    # AOT 预编译
+    # AOT compile
     logger.info("[Seed-PINN] Compiling seed training step...")
     t0 = time.time()
     update = PINN_seed_update.lower(
         optimiser_fn, opt_states,
         active_params, static_params_dynamic, static_params_static,
-        seed_x, seed_uv, model_fns
+        seed_x, seed_uv, model_fns,
+        smooth_x, smooth_lambda
     ).compile()
     logger.info(f"[Seed-PINN] Compilation done ({time.time() - t0:.2f}s)")
 
-    # 训练循环
+    # Training loop
     logger.info(f"[Seed-PINN] Seed training {n_steps} steps, "
                 f"{seed_x.shape[0]} seed points...")
     t0 = time.time()
     for i in range(n_steps):
         lossval, opt_states, active_params = update(
             opt_states, active_params, static_params_dynamic,
-            seed_x, seed_uv
+            seed_x, seed_uv, smooth_x, smooth_lambda
         )
         if (i + 1) % summary_freq == 0 or i == 0:
             elapsed = time.time() - t0
@@ -103,6 +136,7 @@ def train_seeds_pinn(all_params, seed_x, seed_uv, model_fns,
 
     all_params["trainable"] = active_params
     logger.info(f"[Seed-PINN] Complete. Final loss: {lossval.item():.6f}")
+    return all_params
     return all_params
 
 

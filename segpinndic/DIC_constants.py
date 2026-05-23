@@ -190,6 +190,8 @@ class Constants(ConstantsBase):
         self.seed_pos = None        # (N,2) seed point coordinates
         self.seed_uv = None         # (N,2) seed point displacements
         self.seed_train_epochs = 0  # number of seed pre-training steps
+        self.seed_smooth_lambda = getattr(DICconfig, "seed_smooth_lambda", 0.0)    # gradient-norm penalty weight
+        self.seed_smooth_npoints = getattr(DICconfig, "seed_smooth_npoints", 0)    # collocation points for smoothness
 
         # Define summary output parameters
         self.summary_freq = getattr(DICconfig, "summary_freq", 1000)        # outputs train stats to command line

@@ -893,6 +893,9 @@ class PINNTrainer(_Trainer):
                 c.seed_train_epochs,
                 c.seed_lr,
                 c.summary_freq,
+                smooth_lambda=c.seed_smooth_lambda,
+                smooth_npoints=c.seed_smooth_npoints,
+                key=key,
             )
 
             # predict and visualize seed-fitted displacement field
