@@ -38,32 +38,23 @@ AdaptiveFCN
 DIC_ZNSSD
 
 # znssd_kernel_size: ZNSSD损失函数的卷积核大小
-31
+63
 
 ############################################
 # 🏋️‍♂️ 训练参数（常调整）
 ############################################
 
 # adam_epochs: Adam轮数
-1000
+500
 
 # lbfgs_epochs: L-BFGS精调轮数（0表示不使用；建议在Adam之后使用，通常100-500）
 0
-
-# lbfgs_history_size: L-BFGS历史窗口大小（存储最近m步的梯度/位置信息）
-10
-
-# lbfgs_maxls: L-BFGS线搜索最大迭代步数
-15
-
-# lbfgs_lr: L-BFGS线搜索最大步长（>0时作为max_stepsize限制搜索范围；<=0时使用默认值1.0）
-1.0
 
 # seed_flag: 判断是否使用种子点，使用的话请配置“Seed_Configuration.txt”
 True
 
 # seed_train_epochs: 种子点预训练轮数（不训练种子点提供网络输出的尺度系数）
-0
+1000
 
 # seed_smooth_lambda: 种子点拟合平滑惩罚系数 (0 = 不使用, 0.01 = 轻微平滑约束, 0.1~1.0 = 强平滑约束)
 0
@@ -79,13 +70,22 @@ True
 0.005
 
 # dic_lr: DIC正式训练学习率（种子预训练后使用，通常应小于adam_lr）
-0.01
+0.001
 
 # adam_betas: Adam动量参数(beta1, beta2)
 [0.9, 0.999]
 
 # adam_decay: Adam权重衰减
 0.0
+
+# lbfgs_history_size: L-BFGS历史窗口大小（存储最近m步的梯度/位置信息）
+10
+
+# lbfgs_maxls: L-BFGS线搜索最大迭代步数
+15
+
+# lbfgs_lr: L-BFGS线搜索最大步长（>0时作为max_stepsize限制搜索范围；<=0时使用默认值1.0）
+1.0
 
 # summary_freq: 打印求解loss频率
 10
