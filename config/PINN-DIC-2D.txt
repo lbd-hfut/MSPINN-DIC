@@ -6,10 +6,10 @@
 ############################################
 
 # input_dir: 输入图像所在的文件夹路径
-C:/Users/LBD/Desktop/视角间匹配PINN-DIC/kernel_size/illumination_test
+case/bbf/2
 
 # output_dir: 结果输出文件夹路径
-C:/Users/LBD/Desktop/视角间匹配PINN-DIC/kernel_size/illumination_test/results
+case/bbf/2/results
 
 ############################################
 # 🧠 网络结构参数（一般偶尔改）
@@ -20,13 +20,13 @@ C:/Users/LBD/Desktop/视角间匹配PINN-DIC/kernel_size/illumination_test/resul
 ############################################
 
 # n_subdomains: 区域分割
-[1,1]
+[4,1]
 
 # train_schedulers: 训练方式 ["AllActiveSchedulerND", "PointSchedulerRectangularND", "LineSchedulerRectangularND"]
 AllActiveSchedulerND
 
 # hidden_units: PINN-DIC神经元数目列表
-[32,32,32,32]
+[32,32,32]
 
 # network: 神经网络 ["FCN", "AdaptiveFCN", "SIREN", "AdaptiveSIREN", "ResNet", "AdaptiveResNet"， "FourierNet"]
 AdaptiveFCN
@@ -38,14 +38,14 @@ AdaptiveFCN
 DIC_ZNSSD
 
 # znssd_kernel_size: ZNSSD损失函数的卷积核大小
-63
+7
 
 ############################################
 # 🏋️‍♂️ 训练参数（常调整）
 ############################################
 
 # adam_epochs: Adam轮数
-500
+400
 
 # lbfgs_epochs: L-BFGS精调轮数（0表示不使用；建议在Adam之后使用，通常100-500）
 0
@@ -54,7 +54,7 @@ DIC_ZNSSD
 True
 
 # seed_train_epochs: 种子点预训练轮数（不训练种子点提供网络输出的尺度系数）
-1000
+0
 
 # seed_smooth_lambda: 种子点拟合平滑惩罚系数 (0 = 不使用, 0.01 = 轻微平滑约束, 0.1~1.0 = 强平滑约束)
 0
