@@ -1,4 +1,4 @@
-from segpinndic.DIC_importlib import os, pickle, jax, jnp, np, SummaryWriter, savemat
+from segpinndic.DIC_importlib import os, pickle, jax, jnp, np, plt, SummaryWriter, savemat
 
 from segpinndic.DIC_config import seed_config_txt, DIC_config_txt
 from segpinndic.DIC_readImg import BufferManager, ImgDataset
@@ -18,6 +18,9 @@ def main(
     
     DIC_config = DIC_config_txt(dic_config_path, verbose=False)
     Seed_config = seed_config_txt(seed_config_path, verbose=False)
+    if not DIC_config.show_figures:
+        # Avoid requiring a working Tk/Qt installation for batch experiments.
+        plt.switch_backend("Agg")
     
     ImgData = ImgDataset(DIC_config, Seed_config)
     SeedCalculator = CalcSeeds(Seed_config)
@@ -73,7 +76,10 @@ def main(
                 BufferManager.scale_uv[roi_id][3]
             ])
             # 小变形（scale_uv 均 < 20）时跳过种子点预训练
-            do_seed = DIC_config.seed_flag and not bool(jnp.all(BufferManager.scale_uv[roi_id] < 5))
+            force_seed = getattr(DIC_config, "force_seed_training", False)
+            do_seed = DIC_config.seed_flag and (
+                force_seed
+                or not bool(jnp.all(BufferManager.scale_uv[roi_id] < 5)))
             if DIC_config.seed_flag:
                 logger.info(f"[Seed {'Enable ' if do_seed else 'Disable'}] ROI {roi_id+1}, scale_uv={BufferManager.scale_uv[roi_id]}")
             c.load_kwargs(

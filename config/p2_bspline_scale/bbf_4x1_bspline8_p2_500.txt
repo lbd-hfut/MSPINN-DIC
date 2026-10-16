@@ -1,0 +1,78 @@
+# input_dir:
+case/bbf/1
+# output_dir:
+case/bbf/1/results/p2_bspline_scale_phase/bspline8_p2
+# n_subdomains:
+[4,1]
+# train_schedulers:
+AllActiveSchedulerND
+# hidden_units:
+[32,32,32,32]
+# network:
+AdaptiveFCN
+# spline_degree:
+5
+# loss_fun:
+DIC_ZNSSD
+# znssd_kernel_size:
+7
+# adam_epochs:
+500
+# lbfgs_epochs:
+0
+# lbfgs_history_size:
+10
+# lbfgs_maxls:
+15
+# lbfgs_lr:
+1.0
+# seed_flag:
+True
+# force_seed_training:
+False
+# seed_train_epochs:
+0
+# seed_smooth_lambda:
+0
+# seed_smooth_npoints:
+0
+# adam_lr:
+0.005
+# dic_lr:
+0.001
+# summary_freq:
+50
+# test_flag:
+False
+# test_freq:
+10000
+# model_save_freq:
+50
+# show_figures:
+False
+# save_figures:
+False
+# clear_output:
+False
+# field_mode:
+bspline_residual
+# global_field_type:
+bspline
+# assembly_method:
+bspline_p2_residual
+# bspline_grid:
+[8,8]
+# bspline_degree:
+3
+# backbone_stage1_steps:
+200
+# backbone_stage2_steps:
+0
+# backbone_residual_schedule:
+direct
+# freeze_backbone_stage2:
+False
+# p2_regularization:
+1e-8
+# stage_snapshot_steps:
+[0,200,500]

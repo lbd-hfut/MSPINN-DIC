@@ -1,10 +1,12 @@
 from segpinndic.DIC_importlib import os, time, pickle, jax, jaxopt, jnp, np, plt, SummaryWriter, \
     jit, vmap, value_and_grad, jvp, partial, random, optax
 import IPython.display
+import json
+import hashlib
 
 from segpinndic.utils.logger import switch_to_file_logger, logger
 from segpinndic.utils.jax_util import tree_index, total_size, str_tensor, partition, combine
-from segpinndic import DIC_networks, DIC_plot_trainer
+from segpinndic import DIC_assemblies, DIC_networks, DIC_plot_trainer
 
 
 class _Trainer:
@@ -19,6 +21,11 @@ class _Trainer:
         writer.add_text("constants", str(c).replace("\n","  \n"))# uses markdown
 
         self.c, self.writer = c, writer
+        self.adam_loss_history = []
+        self.adam_time_history = []
+        self.lbfgs_loss_history = []
+        self.compile_seconds = 0.0
+        self.initial_parameter_metrics = {}
 
     def _print_summary(self, i, loss, rate, start):
         "Prints training summary"
@@ -33,6 +40,73 @@ class _Trainer:
                 ))
         self.writer.add_scalar("loss/train", loss, i)
         self.writer.add_scalar("stats/rate", rate, i)
+        self.adam_loss_history.append((int(i), float(loss)))
+        self.adam_time_history.append((int(i), float(time.time()-start)))
+
+    def _save_run_metrics(self, final_loss, total_seconds, prediction_seconds):
+        metrics = {
+            "assembly_method": getattr(self.c, "assembly_method", "single_pinn"),
+            "roi_id": int(self.c.roi_id),
+            "pair_idx": int(self.c.pair_idx),
+            "adam_steps": int(self.c.n_steps),
+            "lbfgs_steps": int(self.c.lbfgs_epochs),
+            "final_loss": float(final_loss),
+            "compile_seconds": float(self.compile_seconds),
+            "total_seconds": float(total_seconds),
+            "prediction_seconds": float(prediction_seconds),
+            **self.initial_parameter_metrics,
+            "adam_loss_history": self.adam_loss_history,
+            "adam_time_history": self.adam_time_history,
+            "lbfgs_loss_history": self.lbfgs_loss_history,
+        }
+        if getattr(self.c.assembly, "uses_backbone_schedule", False):
+            metrics["backbone_schedule"] = {
+                "stage1_steps": int(self.c.backbone_stage1_steps),
+                "stage2_steps": int(self.c.backbone_stage2_steps),
+                "stage2_gate": float(self.c.backbone_stage2_gate),
+                "mode": self.c.backbone_residual_schedule,
+            }
+        if getattr(self.c, "local_projection_order", -1) >= 0:
+            metrics["local_projection"] = {
+                "order": int(self.c.local_projection_order),
+                "weighting": self.c.projection_weighting,
+                "regularization": float(self.c.projection_regularization),
+                "point_count_per_subdomain": int(
+                    self.c.projection_point_count),
+                "representation_constraint": "hard_projection_not_loss",
+            }
+        path = os.path.join(
+            self.c.summary_out_dir,
+            f"run_metrics_roi{self.c.roi_id}_pair{self.c.pair_idx}.json",
+        )
+        with open(path, "w", encoding="utf-8") as stream:
+            json.dump(metrics, stream, indent=2)
+        logger.info(f"Run metrics saved to {path}")
+
+    def _record_initial_parameter_metrics(self, all_params):
+        """Record reproducibility and capacity evidence before any fitting."""
+
+        def fingerprint(tree):
+            digest = hashlib.sha256()
+            for leaf in jax.tree_util.tree_leaves(tree):
+                array = np.asarray(leaf)
+                digest.update(str(array.shape).encode("ascii"))
+                digest.update(str(array.dtype).encode("ascii"))
+                digest.update(array.tobytes(order="C"))
+            return digest.hexdigest()
+
+        trainable = all_params["trainable"]
+        local = trainable.get("network", {})
+        local_count = int(total_size(local))
+        total_count = int(total_size(trainable))
+        self.initial_parameter_metrics = {
+            "random_seed": int(self.c.seed),
+            "initial_local_parameter_sha256": fingerprint(local),
+            "initial_trainable_parameter_sha256": fingerprint(trainable),
+            "local_trainable_parameter_count": local_count,
+            "extra_trainable_parameter_count": total_count-local_count,
+            "total_trainable_parameter_count": total_count,
+        }
         
     def _print_test(
         self,
@@ -192,50 +266,15 @@ def PINN_model_inner(all_params, x, norm_fn, network_fn, unnorm_fn):
 def FBPINN_model(all_params, x_batch, takes, model_fns, verbose=True):
     "Defines FBPINN model"
 
-    norm_fn, network_fn, unnorm_fn, window_fn = model_fns
-    m_take, n_take, p_take, np_take, npou = takes
-
-    # take x_batch
-    x_take = x_batch[n_take]# (s, xd)
-
-    # take subdomain params
-    d = all_params
-    all_params_take = {
-        t_k: {
-            cl_k: {
-                k: jax.tree_util.tree_map(lambda p:p[m_take], d[t_k][cl_k][k]) if k=="subdomain" else d[t_k][cl_k][k]
-                for k in d[t_k][cl_k]
-            }
-            for cl_k in d[t_k]
-        }
-        for t_k in ["static", "trainable"]
-    }
-    f = {
-        t_k: {
-            cl_k: {
-                k: jax.tree_util.tree_map(lambda p: 0, d[t_k][cl_k][k]) if k=="subdomain" else jax.tree_util.tree_map(lambda p: None, d[t_k][cl_k][k])
-                for k in d[t_k][cl_k]
-            }
-            for cl_k in d[t_k]
-        }
-        for t_k in ["static", "trainable"]
-    }
-
-    logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params))
-    logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params_take))
-
-    # batch over parameters and points
-    us, ws, us_raw, us_u = vmap(FBPINN_model_inner, in_axes=(f,0,None,None,None,None))(all_params_take, x_take, norm_fn, network_fn, unnorm_fn, window_fn)# (s, ud)
-
-    # apply POU and sum
-    u = jnp.concatenate([us, ws], axis=1)# (s, ud+1)
-    u = jax.ops.segment_sum(u, p_take, indices_are_sorted=False, num_segments=len(np_take))# (_, ud+1)
-    wp = u[:,-1:]
-    u = u[:,:-1]/wp
-    u = jax.ops.segment_sum(u, np_take, indices_are_sorted=False, num_segments=len(x_batch))# (n, ud)
-    u = u/npou
-
-    return u, wp, us, ws, us_raw, us_u
+    # A four-function tuple is retained as a compatibility path for callers
+    # that predate configurable assembly.
+    if len(model_fns) == 4:
+        local_fns = model_fns
+        assembly = DIC_assemblies.CosinePOUAssembly
+    else:
+        local_fns = model_fns[:4]
+        assembly = model_fns[4]
+    return assembly.assemble(all_params, x_batch, takes, local_fns)
 
 def PINN_model(all_params, x_batch, model_fns, verbose=True):
     "Defines PINN model"
@@ -346,6 +385,20 @@ def FBPINN_update(optimiser_fn, active_opt_states,
     active_params = optax.apply_updates(active_params, updates)
     return lossval, active_opt_states, active_params
 
+
+def _restore_frozen_global_field(previous_params, updated_params):
+    """Keep coarse-field parameters exact while residual parameters update.
+
+    A zero gradient is insufficient for Adam because accumulated momentum can
+    continue to move a parameter after the schedule boundary.  Replacing the
+    updated subtree makes the Stage-2 freeze an exact parameter constraint.
+    """
+    if "global_field" not in previous_params:
+        return updated_params
+    restored = dict(updated_params)
+    restored["global_field"] = previous_params["global_field"]
+    return restored
+
 @partial(jit, static_argnums=(0, 4, 6, 7))
 def PINN_update(optimiser_fn, active_opt_states,
                 active_params, static_params_dynamic, static_params_static,
@@ -379,8 +432,11 @@ def PINN_predict_jit(all_params, x_batch, jmaps, model_fns):
     return _PINN_predict_jit(all_params_dynamic, all_params_static, x_batch, jmaps, model_fns)
 
 
-def get_inputs(x_batch, active, all_params, decomposition):
+def get_inputs(x_batch, active, all_params, decomposition, assembly=None):
     "Get the inputs to the FBPINN model based on x_batch and the active models"
+
+    if assembly is None:
+        assembly = DIC_assemblies.CosinePOUAssembly
 
     # get the ims inside x_batch
     n_take, m_take, training_ims = decomposition.inside_points(all_params, x_batch)# (nc, m)
@@ -394,9 +450,18 @@ def get_inputs(x_batch, active, all_params, decomposition):
     # 0 = discard (not in current training points)
     # 1 = active
     # 2 = fixed
-    active = jnp.array(active).copy()
+    requested_active = jnp.array(active).copy()
+    active = requested_active.copy()
     assert jnp.isin(active, jnp.array([0,1,2])).all()
     assert active.shape == (all_params["static"]["decomposition"]["m"],)
+
+    # Seed/all-active training and full-field prediction need a complete chain
+    # for derivative-aware endpoint/corner ownership. Scheduled mixed states
+    # retain the historical overlap-based cut and fail clearly if insufficient.
+    if assembly.requires_complete_chain:
+        requested_np = np.asarray(requested_active)
+        if np.all(requested_np == 0) or np.all(requested_np == 1):
+            training_ims = jnp.arange(all_params["static"]["decomposition"]["m"])
 
     active = active.at[active==0].set(1)# set inactive models to active
     mask = jnp.zeros_like(active)# mask out models in training points
@@ -428,9 +493,9 @@ def get_inputs(x_batch, active, all_params, decomposition):
 
     # get POUs
     pous = all_params["static"]["decomposition"]["subdomain"]["pou"][all_ims].astype(int)
-    np = jnp.stack([n_take, pous[m_take,0]], axis=-1).astype(int)# points and pous
+    point_pous = jnp.stack([n_take, pous[m_take,0]], axis=-1).astype(int)# points and pous
     # logger.debug(str_tensor(np))
-    npu,p_take = jnp.unique(np, axis=0, return_inverse=True)# unique points and pous (sorted), point-pou takes
+    npu,p_take = jnp.unique(point_pous, axis=0, return_inverse=True)# unique points and pous (sorted), point-pou takes
     np_take = npu[:,0]
     # logger.debug(str_tensor(p_take))
     # logger.debug(str_tensor(np_take))
@@ -438,6 +503,7 @@ def get_inputs(x_batch, active, all_params, decomposition):
     # logger.debug(f"Total number of POUs: {npou}")
 
     takes = (m_take, n_take, p_take, np_take, npou)
+    assembly_plan = assembly.build_plan(all_params, x_batch, takes, all_ims)
 
     # cut active and fixed parameter trees
     def cut_active(d):
@@ -465,7 +531,7 @@ def get_inputs(x_batch, active, all_params, decomposition):
                     d[cl_k][k] = da[cl_k][k]
         return d
 
-    return takes, all_ims, (active, cut_active, cut_fixed, cut_all, merge_active)
+    return assembly_plan, all_ims, (active, cut_active, cut_fixed, cut_all, merge_active)
 
 
 def _common_train_initialisation(c, key, all_params, problem, domain):
@@ -534,7 +600,8 @@ class FBPINNTrainer(_Trainer):
         x_batch = self._get_x_batch(i, active, all_params, x_batch_global, decomposition)
 
         # get model takes / scheduler cuts given x_batch and active
-        takes, _, (active, cut_active, cut_fixed, cut_all, merge_active) = get_inputs(x_batch, active, all_params, decomposition)
+        takes, _, (active, cut_active, cut_fixed, cut_all, merge_active) = get_inputs(
+            x_batch, active, all_params, decomposition, self.c.assembly)
 
         # cut params / opt states (schedule)
         active_params = cut_active(all_params["trainable"]) # cut active params
@@ -558,6 +625,7 @@ class FBPINNTrainer(_Trainer):
         "Train model"
 
         c, writer = self.c, self.writer
+        run_start = time.time()
 
         # generate root key
         key = random.PRNGKey(c.seed)
@@ -566,13 +634,20 @@ class FBPINNTrainer(_Trainer):
         # define all_params
         all_params = {"static":{},"trainable":{}}
 
-        # initialise domain, problem and decomposition params
-        domain, problem, decomposition = c.domain, c.problem, c.decomposition
-        for tag, cl, kwargs in zip(["domain", "problem", "decomposition"], [domain, problem, decomposition],
-                                   [c.domain_init_kwargs, c.problem_init_kwargs, c.decomposition_init_kwargs]):
+        # initialise domain, problem, decomposition, and assembly params
+        domain, problem, decomposition, assembly = (
+            c.domain, c.problem, c.decomposition, c.assembly)
+        for tag, cl, kwargs in zip(
+                ["domain", "problem", "decomposition", "assembly"],
+                [domain, problem, decomposition, assembly],
+                [c.domain_init_kwargs, c.problem_init_kwargs,
+                 c.decomposition_init_kwargs, c.assembly_init_kwargs]):
             ps_ = cl.init_params(**kwargs)
             if ps_[0]: all_params["static"][tag] = ps_[0]
             if ps_[1]: all_params["trainable"][tag] = ps_[1]
+        if assembly.uses_backbone_schedule:
+            all_params["static"]["assembly"]["residual_gate"] = jnp.asarray(
+                c.residual_gate_at_step(0), dtype=jnp.float32)
         assert (all_params["static"]["domain"]["xd"] ==\
                 all_params["static"]["problem"]["dims"][1] ==\
                 all_params["static"]["decomposition"]["xd"])
@@ -584,9 +659,27 @@ class FBPINNTrainer(_Trainer):
         ps_ = vmap(network.init_params, in_axes=(0, None))(jnp.array(subkeys), *c.network_init_kwargs.values())
         if ps_[0]: all_params["static"]["network"] = tree_index(ps_[0],0)# grab first set of static params only
         if ps_[1]: all_params["trainable"]["network"] = {"subdomain": ps_[1]}# add subdomain key
+        if assembly.uses_backbone_schedule:
+            all_params["trainable"]["network"] = (
+                assembly.initialize_local_residual_params(
+                    all_params["trainable"]["network"]))
+        # Assemblies may own extra representation parameters (for example a
+        # global backbone).  The trainer only knows this generic hook.
+        key, extra_key = random.split(key)
+        extra_static, extra_trainable = assembly.init_extra_params(
+            extra_key, network, **c.assembly_extra_init_kwargs)
+        all_params["static"].update(extra_static)
+        all_params["trainable"].update(extra_trainable)
+        self._record_initial_parameter_metrics(all_params)
         # logger.debug("all_params")
         # logger.debug(jax.tree_util.tree_map(lambda x: str_tensor(x), all_params))
-        model_fns = (decomposition.norm_fn, network.network_fn, decomposition.unnorm_fn, decomposition.window_fn)
+        model_fns = (
+            decomposition.norm_fn,
+            network.network_fn,
+            decomposition.unnorm_fn,
+            decomposition.window_fn,
+            assembly,
+        )
 
         # seed supervised pre-training
         if c.seed_train_epochs > 0 and c.seed_pos is not None:
@@ -609,7 +702,7 @@ class FBPINNTrainer(_Trainer):
             m = all_params["static"]["decomposition"]["m"]
             active = jnp.zeros(m, dtype=int)
             takes, _, (_, cut_active, _, cut_all, _) = \
-                get_inputs(x_batch_roi, active, all_params, decomposition)
+                get_inputs(x_batch_roi, active, all_params, decomposition, assembly)
             trainable_cut = cut_active(all_params["trainable"])
             static_cut = cut_all(all_params["static"])
             all_params_cut = {"static": static_cut, "trainable": trainable_cut}
@@ -648,18 +741,49 @@ class FBPINNTrainer(_Trainer):
                 startc = time.time()
                 logger.info(f"[i: {i}/{self.c.n_steps}] Compiling update step..")
                 static_params_dynamic, static_params_static = partition(static_params)
+                # ``partition`` represents dynamic leaves as a flat tuple.
+                # Keep the index of the residual gate so schedule updates can
+                # flow into the already-compiled step without recompilation.
+                residual_gate_leaf_idx = None
+                if assembly.uses_backbone_schedule:
+                    gate_leaf = static_params["assembly"]["residual_gate"]
+                    static_leaves, _ = jax.tree_util.tree_flatten(static_params)
+                    residual_gate_leaf_idx = next(
+                        idx for idx, leaf in enumerate(static_leaves)
+                        if leaf is gate_leaf
+                    )
                 update = FBPINN_update.lower(optimiser_fn, active_opt_states,
                                              active_params, fixed_params, static_params_dynamic, static_params_static,
                                              takes, x_batch, model_fns, loss_fn).compile()
-                logger.info(f"[i: {i}/{self.c.n_steps}] Compiling done ({time.time()-startc:.2f} s)")
+                compile_elapsed = time.time()-startc
+                self.compile_seconds += compile_elapsed
+                logger.info(f"[i: {i}/{self.c.n_steps}] Compiling done ({compile_elapsed:.2f} s)")
                 cost_ = update.cost_analysis()
                 p = total_size(active_params["network"])
                 f = cost_.get("flops", 0) if cost_ else 0
                 logger.info("p, f")
                 logger.info((p,f))
 
+            # The gate is a dynamic assembly control, not a residual penalty.
+            # During Stage 1 it is exactly zero, so local residual fields do
+            # not participate in the forward model or receive photometric
+            # gradients; later stages release it structurally.
+            if assembly.uses_backbone_schedule:
+                gate = c.residual_gate_at_step(i)
+                all_params["static"]["assembly"]["residual_gate"] = jnp.asarray(
+                    gate, dtype=jnp.float32)
+                dynamic_leaves = list(static_params_dynamic)
+                dynamic_leaves[residual_gate_leaf_idx] = jnp.asarray(
+                    gate, dtype=jnp.float32)
+                static_params_dynamic = tuple(dynamic_leaves)
+                self.writer.add_scalar("backbone/residual_gate", gate, i)
+
             # report initial model
             if i == 0:
+                if 0 in c.stage_snapshot_steps:
+                    self._save_model(0, (
+                        0, all_params, all_opt_states, active,
+                        jnp.array(jnp.nan)))
                 lossval, start1, report_time = \
                 self._report(i, start0, start1, report_time,
                             all_params, all_opt_states,
@@ -667,10 +791,19 @@ class FBPINNTrainer(_Trainer):
                             lossval, decomposition, x_batch_global, jmaps, model_fns)
 
             # take a training step
+            previous_active_params = active_params
             lossval, active_opt_states, active_params = update(active_opt_states,
                                          active_params, fixed_params, static_params_dynamic,
                                          takes, x_batch)# note compiled function only accepts dynamic arguments
+            if (getattr(c, "freeze_backbone_stage2", False)
+                    and i >= c.backbone_stage1_steps):
+                active_params = _restore_frozen_global_field(
+                    previous_active_params, active_params)
             pstep, fstep = pstep+p, fstep+f
+
+            if assembly.uses_backbone_schedule:
+                all_params["static"]["assembly"]["residual_gate"] = jnp.asarray(
+                    c.residual_gate_at_step(i+1), dtype=jnp.float32)
 
             # report
             lossval, start1, report_time = \
@@ -679,8 +812,6 @@ class FBPINNTrainer(_Trainer):
                         active, merge_active, active_opt_states, active_params,
                         lossval, decomposition, x_batch_global, jmaps, model_fns)
 
-        # cleanup
-        writer.close()
         logger.info(f"[i: {i+1}/{self.c.n_steps}] Training complete")
 
         # return trained parameters (final merge)
@@ -696,7 +827,7 @@ class FBPINNTrainer(_Trainer):
 
             x_batch_all = self._get_x_batch(0, active_all, all_params, x_batch_global, decomposition)
             takes_all, _, (active_all, cut_active_all, cut_fixed_all, cut_all, merge_active_all) = \
-                get_inputs(x_batch_all, active_all, all_params, decomposition)
+                get_inputs(x_batch_all, active_all, all_params, decomposition, assembly)
 
             active_params_all = cut_active_all(all_params["trainable"])
             fixed_params_empty = cut_fixed_all(all_params["trainable"])
@@ -736,11 +867,21 @@ class FBPINNTrainer(_Trainer):
                     lossval_lbfgs = lbfgs_state.value
                     elapsed = time.time() - start_lbfgs
                     logger.info(f"[L-BFGS: {j+1}/{c.lbfgs_epochs}] loss: {lossval_lbfgs.item():.6e} | {elapsed:.1f}s")
+                    self.lbfgs_loss_history.append((j + 1, float(lossval_lbfgs.item())))
+                    writer.add_scalar("loss/lbfgs", lossval_lbfgs.item(), j + 1)
 
             all_params["trainable"] = merge_active_all(active_params_all, all_params["trainable"])
+            lossval = lbfgs_state.value
             logger.info(f"L-BFGS refinement done ({time.time()-start_lbfgs:.2f} s)")
 
+        prediction_start = time.time()
         u, v, exx, exy, eyy = self._predict(all_params, decomposition, x_batch_global, jmaps, model_fns)
+        prediction_seconds = time.time() - prediction_start
+        final_loss = float(lossval.item() if hasattr(lossval, "item") else lossval)
+        writer.add_scalar("loss/final", final_loss, c.n_steps + c.lbfgs_epochs)
+        self._save_run_metrics(
+            final_loss, time.time() - run_start, prediction_seconds)
+        writer.close()
         
         return all_params, u, v, exx, exy, eyy, x_batch_global
 
@@ -824,7 +965,7 @@ class FBPINNTrainer(_Trainer):
             logger.info(f"Predicting on batch {i+1}/{x_batches.shape[0]}..")
             active = jnp.zeros(all_params["static"]["decomposition"]["m"], dtype=int)
             takes, _, (active, cut_active, cut_fixed, cut_all, merge_active) = \
-                get_inputs(x_batch, active, all_params, decomposition)
+                get_inputs(x_batch, active, all_params, decomposition, model_fns[4])
                 
             trainable_params = cut_active(all_params["trainable"])
             static_params = cut_all(all_params["static"])
@@ -850,6 +991,7 @@ class PINNTrainer(_Trainer):
         "Train model"
 
         c, writer = self.c, self.writer
+        run_start = time.time()
 
         # generate root key
         key = random.PRNGKey(c.seed)
@@ -924,7 +1066,9 @@ class PINNTrainer(_Trainer):
         update = PINN_update.lower(optimiser_fn, active_opt_states,
                                    active_params, static_params_dynamic, static_params_static,
                                    x_batch, model_fns, loss_fn).compile()
-        logger.info(f"[i: {0}/{self.c.n_steps}] Compiling done ({time.time()-startc:.2f} s)")
+        compile_elapsed = time.time()-startc
+        self.compile_seconds += compile_elapsed
+        logger.info(f"[i: {0}/{self.c.n_steps}] Compiling done ({compile_elapsed:.2f} s)")
         cost_ = update.cost_analysis()
         p = total_size(active_params["network"])
         f = cost_.get("flops", 0) if cost_ else 0
@@ -994,19 +1138,26 @@ class PINNTrainer(_Trainer):
                     lossval = lbfgs_state.value
                     elapsed = time.time() - start_lbfgs
                     logger.info(f"[L-BFGS: {j+1}/{c.lbfgs_epochs}] loss: {lossval.item():.6e} | {elapsed:.1f}s")
+                    self.lbfgs_loss_history.append((j + 1, float(lossval.item())))
+                    writer.add_scalar("loss/lbfgs", lossval.item(), j + 1)
 
             lossval = lbfgs_state.value
             logger.info(f"L-BFGS refinement done ({time.time()-start_lbfgs:.2f} s)")
 
-        # cleanup
-        writer.close()
         logger.info(f"[i: {i+1}/{self.c.n_steps}] Training complete")
 
         # return trained parameters
         all_params["trainable"] = active_params
         all_opt_states = active_opt_states
 
+        prediction_start = time.time()
         u, v, exx, exy, eyy = self._predict(all_params, x_batch_global, jmaps, model_fns)
+        prediction_seconds = time.time() - prediction_start
+        final_loss = float(lossval.item() if hasattr(lossval, "item") else lossval)
+        writer.add_scalar("loss/final", final_loss, c.n_steps + c.lbfgs_epochs)
+        self._save_run_metrics(
+            final_loss, time.time() - run_start, prediction_seconds)
+        writer.close()
 
         return all_params, u, v, exx, exy, eyy, x_batch_global
 

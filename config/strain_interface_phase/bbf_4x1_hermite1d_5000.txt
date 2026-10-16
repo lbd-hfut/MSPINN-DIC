@@ -1,0 +1,62 @@
+# input_dir:
+case/bbf/1
+# output_dir:
+case/bbf/1/results/strain_interface_phase/fair_sweep
+# n_subdomains:
+[4,1]
+# train_schedulers:
+AllActiveSchedulerND
+# hidden_units:
+[32,32,32,32]
+# network:
+AdaptiveFCN
+# spline_degree:
+5
+# loss_fun:
+DIC_ZNSSD
+# znssd_kernel_size:
+7
+# adam_epochs:
+3000
+# lbfgs_epochs:
+0
+# seed_flag:
+True
+# force_seed_training:
+False
+# seed_train_epochs:
+0
+# seed_smooth_lambda:
+0
+# seed_smooth_npoints:
+0
+# adam_lr:
+0.005
+# dic_lr:
+0.001
+# lbfgs_history_size:
+10
+# lbfgs_maxls:
+15
+# lbfgs_lr:
+1.0
+# summary_freq:
+100
+# test_flag:
+False
+# test_freq:
+10000
+# model_save_freq:
+500
+# show_figures:
+False
+# save_figures:
+False
+# clear_output:
+False
+# assembly_method:
+hermite_1d_c1
+# assembly_eps:
+1e-8
+# bicubic_cell_size:
+4.0

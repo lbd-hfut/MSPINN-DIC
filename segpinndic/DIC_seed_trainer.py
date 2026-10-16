@@ -7,8 +7,8 @@ that helps convergence in large-deformation scenarios where boundary warp
 gradients would otherwise destabilize global optimization.
 
 PINN:  MSE 在 unnormalized network output (像素位移) 与真实种子点位移之间。
-FBPINN: 每个子域独立拟合其区域内的种子点，loss 在 unnormalized output (u) 上计算。
-        各子域使用各自的 unnorm 参数将 raw output 恢复为像素位移后比较。
+FBPINN: 使用与 photometric training 完全相同的 global assembly 拟合种子点。
+        因此 cosine/quintic/Hermite 的 seed、Adam、L-BFGS、prediction 路径一致。
 """
 
 from segpinndic.DIC_importlib import time, jax, jnp, np, jit, vmap, value_and_grad, partial, optax
@@ -146,13 +146,7 @@ def train_seeds_pinn(all_params, seed_x, seed_uv, model_fns,
 
 def FBPINN_seed_loss(active_params, fixed_params, static_params, takes, x_batch,
                      model_fns, seed_uv):
-    """每个子域的 unnormalized output 与真实种子点位移之间的 MSE。
-
-    与 photometric loss 的关键区别：
-    - 使用 FBPINN_model 的第6个返回值 us_u（unnormalized、未加窗的输出）
-    - 直接在像素位移空间比较
-    - 每个 (point, subdomain) pair 独立计算误差
-    """
+    """MSE between assembled global displacement and seed displacement."""
     # 合并 active + fixed params → 完整的 trainable_params
     d, da = active_params, fixed_params
     trainable_params = {
@@ -167,14 +161,8 @@ def FBPINN_seed_loss(active_params, fixed_params, static_params, takes, x_batch,
     }
     all_params = {"static": static_params, "trainable": trainable_params}
 
-    # FBPINN_model 返回 (u, wp, us, ws, us_raw, us_u)
-    # us_u: (s, ud) — 每个 (point, subdomain) pair 的 unnormalized 输出 (像素位移)
-    _, _, _, _, _, us_u = FBPINN_model(all_params, x_batch, takes, model_fns)
-
-    # n_take 将 pair index 映射到 point index
-    _, n_take, _, _, _ = takes
-    target = seed_uv[n_take]
-    return jnp.mean((us_u - target) ** 2)
+    assembled_uv = FBPINN_model(all_params, x_batch, takes, model_fns)[0]
+    return jnp.mean((assembled_uv - seed_uv) ** 2)
 
 
 @partial(jit, static_argnums=(0, 5, 8))
@@ -195,12 +183,9 @@ def train_seeds_fbpinn(all_params, seed_x, seed_uv, model_fns,
                        decomposition, n_steps, learning_rate, summary_freq):
     """FBPINN 种子点监督预训练。
 
-    与 PINN 版本的关键区别：
-    - 种子点通过 decomposition.inside_points 路由到各子域
-    - 每个子域的 network 独立预测，各子域使用自身的 unnorm 参数将 raw output
-      恢复为像素位移后与真实种子位移比较
-    - 只有包含种子点的子域参与训练（其他保持随机初始化）
-    - 不涉及 window/POU 组合——每个子域独立学习
+    Seed points are routed through the same configured global assembly used by
+    photometric Adam, L-BFGS, and prediction.  Hermite derivative terms remain
+    in the differentiable path to local network parameters.
 
     Args:
         all_params: 已初始化的模型参数字典
@@ -223,8 +208,9 @@ def train_seeds_fbpinn(all_params, seed_x, seed_uv, model_fns,
     active = jnp.ones(m, dtype=int)
 
     # 通过 get_inputs 确定每个种子点属于哪些子域
+    assembly = model_fns[4] if len(model_fns) > 4 else None
     takes, all_ims, (active, cut_active, cut_fixed, cut_all, merge_active) = \
-        get_inputs(seed_x, active, all_params, decomposition)
+        get_inputs(seed_x, active, all_params, decomposition, assembly)
 
     if len(all_ims) == 0:
         logger.warning("[Seed-FBPINN] No seed points in any subdomain, skipping.")
@@ -243,7 +229,10 @@ def train_seeds_fbpinn(all_params, seed_x, seed_uv, model_fns,
 
     static_params_dynamic, static_params_static = partition(static_params)
 
-    n_active = len(jnp.unique(takes[0]))
+    # Count from the scheduler mask rather than assuming a particular assembly
+    # plan layout.  Composite assemblies may wrap the base POU takes in a
+    # larger tuple while preserving the same active-model mask.
+    n_active = int(jnp.sum(active == 1))
     logger.info(f"[Seed-FBPINN] Compiling seed training step "
                 f"({n_active}/{m} subdomains with seed points)...")
     t0 = time.time()

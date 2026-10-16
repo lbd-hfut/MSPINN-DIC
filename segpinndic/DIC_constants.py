@@ -1,7 +1,14 @@
 from segpinndic.DIC_importlib import pickle, np, optax, socket, seed
 from segpinndic.utils import io
 
-from segpinndic import DIC_domains, DIC_decompositions, DIC_networks, DIC_schedulers, DIC_problem
+from segpinndic import (
+    DIC_assemblies,
+    DIC_domains,
+    DIC_decompositions,
+    DIC_networks,
+    DIC_schedulers,
+    DIC_problem,
+)
 from segpinndic.DIC_readImg import BufferManager
 
 class ConstantsBase:
@@ -133,6 +140,40 @@ class Constants(ConstantsBase):
             unnorm=(np.array([0., 0.]), np.array([1., 1.])),
             )
 
+        # Define global multi-subdomain assembly.  Missing config preserves the
+        # historical cosine POU and its output-directory naming.
+        self.assembly_method = getattr(DICconfig, "assembly_method", "cosine_pou")
+        self.assembly_explicit = hasattr(DICconfig, "assembly_method")
+        self.assembly = DIC_assemblies.get_assembly(self.assembly_method)
+        self.assembly_init_kwargs = dict(
+            eps=getattr(DICconfig, "assembly_eps", 1e-8),
+            bicubic_cell_size=getattr(DICconfig, "bicubic_cell_size", 4.0),
+            correction_support_ratio=getattr(
+                DICconfig, "correction_support_ratio", 0.5),
+            residual_gate=getattr(DICconfig, "residual_gate", 1.0),
+            global_coordinate_scale=getattr(
+                DICconfig, "global_coordinate_scale", 1.0),
+            p2_regularization=getattr(
+                DICconfig, "p2_regularization", 1.0e-8),
+            freeze_backbone_stage2=getattr(
+                DICconfig, "freeze_backbone_stage2", False),
+            local_projection_order=(
+                -1 if str(getattr(
+                    DICconfig, "local_projection_order", "none")).lower()
+                == "none" else int(DICconfig.local_projection_order)),
+            projection_regularization=getattr(
+                DICconfig, "projection_regularization", 1.0e-8),
+            projection_point_count=getattr(
+                DICconfig, "projection_point_count", 256),
+        )
+        if self.assembly_method in (
+                "hermite_1d_c1", "bicubic_hermite_c1",
+                "c1_minimal_correction_pou") and ny != 1:
+            raise ValueError(
+                f"{self.assembly_method} is currently qualified only for "
+                f"x-chain decomposition [nx, 1], received [{nx}, {ny}]."
+            )
+
         # Define neural network
         net_name = DICconfig.network
         if not hasattr(DIC_networks, net_name):
@@ -141,9 +182,56 @@ class Constants(ConstantsBase):
         self.network_init_kwargs = dict(
             layer_sizes=[2] + DICconfig.hidden_units + [2],
             )
+        self.global_network_init_kwargs = dict(
+            layer_sizes=[2] + getattr(
+                DICconfig, "global_hidden_units", [16, 16, 16, 16]) + [2],
+        )
+        self.field_mode = getattr(DICconfig, "field_mode", "full_local")
+        self.global_field_type = getattr(DICconfig, "global_field_type", "none")
+        self.bspline_grid = tuple(getattr(DICconfig, "bspline_grid", [6, 6]))
+        self.bspline_degree = getattr(DICconfig, "bspline_degree", 3)
+        self.freeze_backbone_stage2 = getattr(
+            DICconfig, "freeze_backbone_stage2", False)
+        self.local_projection_order = self.assembly_init_kwargs[
+            "local_projection_order"]
+        self.projection_weighting = getattr(
+            DICconfig, "projection_weighting", "uniform")
+        self.projection_regularization = self.assembly_init_kwargs[
+            "projection_regularization"]
+        self.projection_point_count = self.assembly_init_kwargs[
+            "projection_point_count"]
+        if self.projection_weighting != "uniform":
+            raise ValueError("projection_weighting is currently fixed at uniform.")
+        if self.global_field_type == "bspline":
+            if self.bspline_grid not in ((4, 4), (6, 6), (8, 8)):
+                raise ValueError("bspline_grid must be [4,4], [6,6], or [8,8].")
+            if self.bspline_degree != 3:
+                raise ValueError("bspline_degree is fixed at 3.")
+        self.assembly_extra_init_kwargs = dict(
+            **self.global_network_init_kwargs,
+            bspline_grid=self.bspline_grid,
+            bspline_degree=self.bspline_degree,
+            xmin=self.domain_init_kwargs["xmin"],
+            xmax=self.domain_init_kwargs["xmax"],
+        )
 
         # Define scheduler
         self.n_steps = getattr(DICconfig, "adam_epochs", 15000)
+        self.backbone_stage1_steps = getattr(
+            DICconfig, "backbone_stage1_steps", 0)
+        self.backbone_stage2_steps = getattr(
+            DICconfig, "backbone_stage2_steps", 0)
+        self.backbone_stage2_gate = getattr(
+            DICconfig, "backbone_stage2_gate", 0.25)
+        self.backbone_residual_schedule = getattr(
+            DICconfig, "backbone_residual_schedule", "none")
+        if self.assembly.uses_backbone_schedule:
+            if self.backbone_stage1_steps <= 0:
+                raise ValueError("backbone-first assemblies require a positive Stage 1.")
+            if self.backbone_stage1_steps + self.backbone_stage2_steps >= self.n_steps:
+                raise ValueError("backbone stages must leave a positive Stage 3.")
+            if self.backbone_residual_schedule not in ("direct", "progressive"):
+                raise ValueError("backbone_residual_schedule must be direct or progressive.")
         scheduler_name = DICconfig.train_schedulers
         if not hasattr(DIC_schedulers, scheduler_name):
             raise ValueError(f"Unknown scheduler: {scheduler_name}")
@@ -201,6 +289,8 @@ class Constants(ConstantsBase):
         self.show_figures = getattr(DICconfig, "show_figures", False)       # whether to show figures
         self.save_figures = getattr(DICconfig, "save_figures", True)        # whether to save figures
         self.clear_output = getattr(DICconfig, "clear_output", False)       # whether to clear ipython output periodically
+        self.stage_snapshot_steps = tuple(getattr(
+            DICconfig, "stage_snapshot_steps", []))
 
         # other constants
         self.hostname = socket.gethostname().lower()
@@ -210,10 +300,32 @@ class Constants(ConstantsBase):
             self.run = net_name + "_" + loss_name
         else:
             self.run = net_name + "_" + scheduler_rename + "_" + f"{nx}x{ny}"  + "_" + loss_name
+        if self.assembly_explicit and nx*ny > 1:
+            self.run += "_" + self.assembly_method
 
     def load_kwargs(self, **kwargs):
         # overwrite with input arguments
         for key in kwargs.keys(): self[key] = kwargs[key]# invokes __setitem__ in ConstantsBase
+
+    def residual_gate_at_step(self, completed_steps):
+        """Structural residual gate for a v2 backbone-first training schedule."""
+
+        if not self.assembly.uses_backbone_schedule:
+            return 1.0
+        step = int(completed_steps)
+        stage1 = self.backbone_stage1_steps
+        stage2 = self.backbone_stage2_steps
+        if getattr(self.assembly, "residual_activates_at_stage1", False):
+            return 0.0 if step < stage1 else 1.0
+        if step <= stage1:
+            return 0.0
+        if self.backbone_residual_schedule == "direct":
+            return 1.0
+        if step <= stage1 + stage2:
+            return self.backbone_stage2_gate*(step-stage1)/stage2
+        stage3 = self.n_steps-stage1-stage2
+        return self.backbone_stage2_gate + (1.0-self.backbone_stage2_gate)*(
+            step-stage1-stage2)/stage3
 
 def print_c_dicts(c_dicts):
     "Pretty print a list of c_dicts"

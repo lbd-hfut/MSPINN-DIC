@@ -98,6 +98,7 @@ class RectangularDecompositionND(Decomposition):
         static_params = {
             "m":m,
             "xd":xd,
+            "nm":nm,
             "subdomain":{"params":params[:-1],# use special key for subdomain parameters
                          "pou":params[-1]}, # Weight function parameters
             "xmins0":xmins0,
